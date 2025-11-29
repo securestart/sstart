@@ -51,13 +51,16 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Download dependencies
+        run: go mod download
+
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          go build -o sstart${{ matrix.goos == 'windows' && '.exe' || '' }} cmd/sstart/main.go
+          go build -o sstart${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/sstart
           ls -lh sstart*
 
       - name: Upload artifact
