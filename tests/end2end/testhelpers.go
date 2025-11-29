@@ -11,6 +11,10 @@ import (
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"crypto/tls"
+	"net/http"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -259,16 +263,18 @@ func VerifyGCSMSecretExists(ctx context.Context, t *testing.T, gcsmContainer *GC
 }
 
 // SetupAzureKeyVault starts an Azure Key Vault emulator container and returns the container info
-// Uses james-gould/azure-keyvault-emulator, which is designed for Azure SDK compatibility
+// Uses Lowkey Vault, a test double for Azure Key Vault that's compatible with Azure Key Vault REST APIs
+// Lowkey Vault is chosen over james-gould emulator because it doesn't require pre-generated SSL certificates,
+// making it much simpler to use in automated test environments
 func SetupAzureKeyVault(ctx context.Context, t *testing.T) *AzureKeyVaultContainer {
 	t.Helper()
 
-	// Azure Key Vault emulator runs on port 4997 (HTTPS) by default
-	// Wait for the port to be ready - the emulator may take a moment to start
+	// Lowkey Vault runs on port 8443 (HTTPS) by default
+	// Wait for the port to be ready - Lowkey Vault may take a moment to start
 	req := testcontainers.ContainerRequest{
-		Image:        "jamesgoulddev/azure-keyvault-emulator:latest",
-		ExposedPorts: []string{"4997/tcp"},
-		WaitingFor:   wait.ForListeningPort("4997/tcp"),
+		Image:        "nagyesta/lowkey-vault:4.0.0-ubi9-minimal",
+		ExposedPorts: []string{"8443/tcp"},
+		WaitingFor:   wait.ForListeningPort("8443/tcp"),
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -284,34 +290,46 @@ func SetupAzureKeyVault(ctx context.Context, t *testing.T) *AzureKeyVaultContain
 		t.Fatalf("Failed to get Azure Key Vault emulator host: %v", err)
 	}
 
-	port, err := container.MappedPort(ctx, "4997/tcp")
+	port, err := container.MappedPort(ctx, "8443/tcp")
 	if err != nil {
 		t.Fatalf("Failed to get Azure Key Vault emulator port: %v", err)
 	}
 
-	// Azure Key Vault emulator uses HTTPS and expects vault URL format: https://host:port
+	// Lowkey Vault uses HTTPS and expects vault URL format: https://host:port
 	vaultURL := fmt.Sprintf("https://%s:%s", host, port.Port())
 
-	// Azure Key Vault emulator doesn't require real Azure credentials for testing
-	// We can use a simple credential with dummy values, or try DefaultAzureCredential
-	// For testing, we'll use DefaultAzureCredential which should work even with dummy values
-	// If it fails, we can fall back to environment variables or a simple credential
-	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	// Lowkey Vault doesn't require real Azure credentials for testing
+	// Use ClientSecretCredential with dummy values - Lowkey Vault doesn't validate these
+	// Using a valid UUID format for tenant ID to avoid format errors
+	cred, err := azidentity.NewClientSecretCredential(
+		"00000000-0000-0000-0000-000000000000", // dummy tenant ID
+		"00000000-0000-0000-0000-000000000000", // dummy client ID
+		"dummy-secret",                          // dummy secret
+		nil,
+	)
 	if err != nil {
-		// For the emulator, we can use dummy credentials since it doesn't validate them
-		// Set dummy values via environment variables if DefaultAzureCredential fails
-		os.Setenv("AZURE_CLIENT_ID", "test-client-id")
-		os.Setenv("AZURE_CLIENT_SECRET", "test-client-secret")
-		os.Setenv("AZURE_TENANT_ID", "test-tenant-id")
-		cred, err = azidentity.NewDefaultAzureCredential(nil)
-		if err != nil {
-			t.Fatalf("Failed to create Azure credential: %v", err)
-		}
+		t.Fatalf("Failed to create Azure credential: %v", err)
 	}
 
-	// Create client - The emulator uses self-signed certificates, so we might need to configure TLS
-	// The Azure SDK should handle this, but we may need to configure it to skip certificate verification
-	client, err := azsecrets.NewClient(vaultURL, cred, nil)
+	// Create client - Lowkey Vault uses self-signed certificates, so we need to configure TLS
+	// to skip certificate verification for testing
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true, // Skip certificate verification for testing
+		},
+	}
+	httpClient := &http.Client{
+		Transport: transport,
+	}
+
+	clientOptions := &azsecrets.ClientOptions{
+		ClientOptions: policy.ClientOptions{
+			Transport: httpClient,
+		},
+		DisableChallengeResourceVerification: true, // Required for Lowkey Vault emulator
+	}
+
+	client, err := azsecrets.NewClient(vaultURL, cred, clientOptions)
 	if err != nil {
 		t.Fatalf("Failed to create Azure Key Vault client: %v", err)
 	}
