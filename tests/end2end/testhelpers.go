@@ -15,8 +15,11 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/hashicorp/vault/api"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	localstack "github.com/testcontainers/testcontainers-go/modules/localstack"
 	"github.com/testcontainers/testcontainers-go/modules/vault"
 )
@@ -42,6 +45,14 @@ type GCSMContainer struct {
 	Endpoint  string                   // empty for real API
 	Client    *secretmanager.Client
 	ProjectID string // GCP project ID for real API
+	Cleanup   func() error
+}
+
+// AzureKeyVaultContainer wraps Azure Key Vault emulator container and client
+type AzureKeyVaultContainer struct {
+	Container testcontainers.Container
+	VaultURL  string
+	Client    *azsecrets.Client
 	Cleanup   func() error
 }
 
@@ -244,5 +255,85 @@ func VerifyGCSMSecretExists(ctx context.Context, t *testing.T, gcsmContainer *GC
 	if err != nil {
 		t.Skipf("Skipping test: Secret '%s' does not exist or is not accessible. "+
 			"Please create it beforehand. See tests/end2end/GCSM_SETUP.md for instructions.", secretID)
+	}
+}
+
+// SetupAzureKeyVault starts an Azure Key Vault emulator container and returns the container info
+func SetupAzureKeyVault(ctx context.Context, t *testing.T) *AzureKeyVaultContainer {
+	t.Helper()
+
+	// Azure Key Vault emulator runs on port 8080
+	req := testcontainers.ContainerRequest{
+		Image:        "mcr.microsoft.com/azure-keyvault/emulator:latest",
+		ExposedPorts: []string{"8080/tcp"},
+		WaitingFor:   wait.ForHTTP("/health").WithPort("8080/tcp"),
+	}
+
+	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: req,
+		Started:          true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to start Azure Key Vault emulator container: %v", err)
+	}
+
+	host, err := container.Host(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get Azure Key Vault emulator host: %v", err)
+	}
+
+	port, err := container.MappedPort(ctx, "8080/tcp")
+	if err != nil {
+		t.Fatalf("Failed to get Azure Key Vault emulator port: %v", err)
+	}
+
+	vaultURL := fmt.Sprintf("http://%s:%s", host, port.Port())
+
+	// For emulator, we use DefaultAzureCredential which will try to authenticate
+	// The emulator typically doesn't require real authentication, but we still need a credential
+	// For emulator, we can use a simple credential or disable authentication
+	// Note: Azure Key Vault emulator may require specific setup
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		// If DefaultAzureCredential fails, try with environment variables
+		// For emulator, we might need to set AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID
+		// or use a different credential type
+		t.Fatalf("Failed to create Azure credential: %v. For emulator, you may need to set AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, and AZURE_TENANT_ID environment variables.", err)
+	}
+
+	client, err := azsecrets.NewClient(vaultURL, cred, nil)
+	if err != nil {
+		t.Fatalf("Failed to create Azure Key Vault client: %v", err)
+	}
+
+	return &AzureKeyVaultContainer{
+		Container: container,
+		VaultURL:  vaultURL,
+		Client:    client,
+		Cleanup: func() error {
+			return container.Terminate(ctx)
+		},
+	}
+}
+
+// SetupAzureKeyVaultSecret creates a secret in Azure Key Vault emulator
+func SetupAzureKeyVaultSecret(ctx context.Context, t *testing.T, akvContainer *AzureKeyVaultContainer, secretName string, secretData map[string]interface{}) {
+	t.Helper()
+
+	// Marshal secret data to JSON
+	secretJSON, err := json.Marshal(secretData)
+	if err != nil {
+		t.Fatalf("Failed to marshal secret data: %v", err)
+	}
+
+	secretValue := string(secretJSON)
+
+	// Set the secret in Azure Key Vault
+	// SetSecret expects a SetSecretParameters struct with Value field
+	_, err = akvContainer.Client.SetSecret(ctx, secretName, azsecrets.SetSecretParameters{
+		Value: &secretValue,
+	}, nil)
+	if err != nil {
+		t.Fatalf("Failed to create secret in Azure Key Vault: %v", err)
 	}
 }
