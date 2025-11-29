@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/dirathea/sstart/internal/provider"
 )
@@ -121,6 +122,14 @@ func (p *SecretsManagerProvider) ensureClient(ctx context.Context, endpoint stri
 	// Use configured region if set
 	if p.region != "" {
 		cfgOpts = append(cfgOpts, config.WithRegion(p.region))
+	}
+
+	// When using a custom endpoint (e.g., LocalStack), use static credentials
+	// to avoid trying to use EC2 IMDS or other credential sources that won't work
+	if endpoint != "" {
+		cfgOpts = append(cfgOpts, config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider("test", "test", ""),
+		))
 	}
 
 	cfg, err := config.LoadDefaultConfig(ctx, cfgOpts...)

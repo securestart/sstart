@@ -35,13 +35,6 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        goos: [linux, darwin, windows]
-        goarch: [amd64, arm64]
-        exclude:
-          - goos: windows
-            goarch: arm64
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -51,18 +44,19 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build binary
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: build --snapshot --clean
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          go build -o sstart${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/sstart
-          ls -lh sstart*
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sstart-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: sstart${{ matrix.goos == 'windows' && '.exe' || '' }}
+          name: sstart-binaries
+          path: dist/*
+          retention-days: 1
 

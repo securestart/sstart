@@ -12,6 +12,31 @@ import (
 	"time"
 )
 
+// getProjectRoot finds the project root directory by looking for go.mod
+func getProjectRoot(t *testing.T) string {
+	t.Helper()
+	// When go test runs, it typically runs from the project root
+	// Walk up the directory tree to find go.mod
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current working directory: %v", err)
+	}
+
+	for {
+		goModPath := filepath.Join(dir, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			return dir
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached root directory
+			t.Fatalf("Could not find go.mod in any parent directory")
+		}
+		dir = parent
+	}
+}
+
 // TestE2E_RunCommand tests the run command with secret injection and inherit config
 func TestE2E_RunCommand(t *testing.T) {
 	ctx := context.Background()
@@ -110,7 +135,10 @@ exit 0
 
 		// Build sstart binary
 		sstartBinary := filepath.Join(tmpDir, "sstart")
-		buildCmd := exec.CommandContext(ctx, "go", "build", "-o", sstartBinary, "../../cmd/sstart")
+		projectRoot := getProjectRoot(t)
+		cmdPath := filepath.Join(projectRoot, "cmd", "sstart")
+		buildCmd := exec.CommandContext(ctx, "go", "build", "-o", sstartBinary, cmdPath)
+		buildCmd.Dir = projectRoot
 		if err := buildCmd.Run(); err != nil {
 			t.Fatalf("Failed to build sstart binary: %v", err)
 		}
@@ -195,7 +223,10 @@ exit 0
 		// Build sstart binary (reuse if already built)
 		sstartBinary := filepath.Join(tmpDir, "sstart")
 		if _, err := os.Stat(sstartBinary); os.IsNotExist(err) {
-			buildCmd := exec.CommandContext(ctx, "go", "build", "-o", sstartBinary, "../../cmd/sstart")
+			projectRoot := getProjectRoot(t)
+			cmdPath := filepath.Join(projectRoot, "cmd", "sstart")
+			buildCmd := exec.CommandContext(ctx, "go", "build", "-o", sstartBinary, cmdPath)
+			buildCmd.Dir = projectRoot
 			if err := buildCmd.Run(); err != nil {
 				t.Fatalf("Failed to build sstart binary: %v", err)
 			}
@@ -287,7 +318,10 @@ done
 
 	// Build sstart binary
 	sstartBinary := filepath.Join(tmpDir, "sstart")
-	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", sstartBinary, "../../cmd/sstart")
+	projectRoot := getProjectRoot(t)
+	cmdPath := filepath.Join(projectRoot, "cmd", "sstart")
+	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", sstartBinary, cmdPath)
+	buildCmd.Dir = projectRoot
 	if err := buildCmd.Run(); err != nil {
 		t.Fatalf("Failed to build sstart binary: %v", err)
 	}
