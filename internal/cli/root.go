@@ -3,6 +3,7 @@ package cli
 import (
 	_ "github.com/dirathea/sstart/internal/provider/aws"
 	_ "github.com/dirathea/sstart/internal/provider/dotenv"
+	_ "github.com/dirathea/sstart/internal/provider/gcsm"
 	_ "github.com/dirathea/sstart/internal/provider/vault"
 	"github.com/spf13/cobra"
 )

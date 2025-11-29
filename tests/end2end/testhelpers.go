@@ -8,13 +8,20 @@ import (
 	"testing"
 	"time"
 
+	secretmanager "cloud.google.com/go/secretmanager/apiv1"
+	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/hashicorp/vault/api"
+	"github.com/testcontainers/testcontainers-go"
 	localstack "github.com/testcontainers/testcontainers-go/modules/localstack"
 	"github.com/testcontainers/testcontainers-go/modules/vault"
+	"github.com/testcontainers/testcontainers-go/wait"
+	"google.golang.org/api/option"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // LocalStackContainer wraps LocalStack container and its endpoint
@@ -29,6 +36,14 @@ type VaultContainer struct {
 	Container *vault.VaultContainer
 	Address   string
 	Client    *api.Client
+	Cleanup   func() error
+}
+
+// GCSMContainer wraps GCSM emulator container, endpoint, and client
+type GCSMContainer struct {
+	Container testcontainers.Container
+	Endpoint  string
+	Client    *secretmanager.Client
 	Cleanup   func() error
 }
 
@@ -109,6 +124,20 @@ func SetupContainers(ctx context.Context, t *testing.T) (*LocalStackContainer, *
 	return localstack, vault
 }
 
+// SetupAllContainers sets up LocalStack, Vault, and GCSM containers
+func SetupAllContainers(ctx context.Context, t *testing.T) (*LocalStackContainer, *VaultContainer, *GCSMContainer) {
+	t.Helper()
+
+	localstack := SetupLocalStack(ctx, t)
+	vault := SetupVault(ctx, t)
+	gcsm := SetupGCSM(ctx, t)
+
+	// Wait for containers to be ready
+	time.Sleep(2 * time.Second)
+
+	return localstack, vault, gcsm
+}
+
 // SetupAWSSecret creates a secret in AWS Secrets Manager (LocalStack)
 func SetupAWSSecret(ctx context.Context, t *testing.T, localstack *LocalStackContainer, secretName string, secretData map[string]string) {
 	t.Helper()
@@ -161,5 +190,101 @@ func SetupVaultSecret(ctx context.Context, t *testing.T, vaultContainer *VaultCo
 	})
 	if err != nil {
 		t.Fatalf("Failed to write secret to Vault: %v", err)
+	}
+}
+
+// SetupGCSM starts a GCSM emulator container and returns the container info
+func SetupGCSM(ctx context.Context, t *testing.T) *GCSMContainer {
+	t.Helper()
+
+	// Use the official Google Cloud Secret Manager emulator image
+	req := testcontainers.ContainerRequest{
+		Image:        "gcr.io/google.com/cloudsdktool/cloud-sdk:emulators",
+		Cmd:          []string{"gcloud", "beta", "emulators", "secret-manager", "start", "--host-port=0.0.0.0:8080"},
+		ExposedPorts: []string{"8080/tcp"},
+		WaitingFor:   wait.ForListeningPort("8080/tcp").WithStartupTimeout(30 * time.Second),
+	}
+
+	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: req,
+		Started:          true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to start GCSM emulator container: %v", err)
+	}
+
+	host, err := container.Host(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get GCSM emulator host: %v", err)
+	}
+
+	port, err := container.MappedPort(ctx, "8080/tcp")
+	if err != nil {
+		t.Fatalf("Failed to get GCSM emulator port: %v", err)
+	}
+
+	endpoint := fmt.Sprintf("%s:%s", host, port.Port())
+
+	// Create client for the emulator
+	client, err := secretmanager.NewClient(ctx,
+		option.WithEndpoint(endpoint),
+		option.WithGRPCDialOption(grpc.WithTransportCredentials(insecure.NewCredentials())),
+		option.WithoutAuthentication(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create GCSM client: %v", err)
+	}
+
+	return &GCSMContainer{
+		Container: container,
+		Endpoint:  endpoint,
+		Client:    client,
+		Cleanup: func() error {
+			return container.Terminate(ctx)
+		},
+	}
+}
+
+// SetupGCSMSecret creates a secret in Google Cloud Secret Manager (emulator)
+func SetupGCSMSecret(ctx context.Context, t *testing.T, gcsmContainer *GCSMContainer, projectID, secretID string, secretData map[string]string) {
+	t.Helper()
+
+	secretJSON, err := json.Marshal(secretData)
+	if err != nil {
+		t.Fatalf("Failed to marshal secret data: %v", err)
+	}
+
+	// Create the secret
+	createSecretReq := &secretmanagerpb.CreateSecretRequest{
+		Parent:   fmt.Sprintf("projects/%s", projectID),
+		SecretId: secretID,
+		Secret: &secretmanagerpb.Secret{
+			Replication: &secretmanagerpb.Replication{
+				Replication: &secretmanagerpb.Replication_Automatic_{
+					Automatic: &secretmanagerpb.Replication_Automatic{},
+				},
+			},
+		},
+	}
+
+	_, err = gcsmContainer.Client.CreateSecret(ctx, createSecretReq)
+	if err != nil {
+		// If secret already exists, that's okay
+		if !strings.Contains(err.Error(), "already exists") {
+			t.Fatalf("Failed to create secret in GCSM: %v", err)
+		}
+	}
+
+	// Add a version with the secret data
+	addVersionReq := &secretmanagerpb.AddSecretVersionRequest{
+		Parent: fmt.Sprintf("projects/%s/secrets/%s", projectID, secretID),
+		Payload: &secretmanagerpb.SecretPayload{
+			Data: secretJSON,
+		},
+	}
+
+	_, err = gcsmContainer.Client.AddSecretVersion(ctx, addVersionReq)
+	if err != nil {
+		t.Fatalf("Failed to add secret version in GCSM: %v", err)
 	}
 }
