@@ -2,10 +2,13 @@ package azurekeyvault
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/dirathea/sstart/internal/provider"
@@ -130,15 +133,41 @@ func (p *AzureKeyVaultProvider) ensureClient(ctx context.Context, vaultURL strin
 	// various authentication methods. For emulator, we typically use environment variables
 	// or managed identity, but for local testing with emulator, we can use DefaultAzureCredential
 	// which will try to authenticate. For emulator, we might need to disable SSL verification.
-	
+
 	// Create credential - DefaultAzureCredential will try multiple authentication methods
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
 		return fmt.Errorf("failed to create Azure credential: %w", err)
 	}
 
+	// Check if this is an emulator (localhost or lowkey-vault)
+	isEmulator := strings.Contains(vaultURL, "localhost") ||
+		strings.Contains(vaultURL, "127.0.0.1") ||
+		strings.Contains(vaultURL, "lowkey-vault")
+
+	// Configure client options
+	var clientOptions *azsecrets.ClientOptions
+	if isEmulator {
+		// For emulators, configure TLS to skip certificate verification
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Skip certificate verification for emulator
+			},
+		}
+		httpClient := &http.Client{
+			Transport: transport,
+		}
+
+		clientOptions = &azsecrets.ClientOptions{
+			ClientOptions: policy.ClientOptions{
+				Transport: httpClient,
+			},
+			DisableChallengeResourceVerification: true, // Required for Lowkey Vault emulator
+		}
+	}
+
 	// Create client
-	client, err := azsecrets.NewClient(vaultURL, cred, nil)
+	client, err := azsecrets.NewClient(vaultURL, cred, clientOptions)
 	if err != nil {
 		return fmt.Errorf("failed to create Azure Key Vault client: %w", err)
 	}
@@ -162,4 +191,3 @@ func parseConfig(config map[string]interface{}) (*AzureKeyVaultConfig, error) {
 
 	return &cfg, nil
 }
-

@@ -11,12 +11,6 @@ import (
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
-	"crypto/tls"
-	"net/http"
-
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -25,7 +19,6 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	localstack "github.com/testcontainers/testcontainers-go/modules/localstack"
 	"github.com/testcontainers/testcontainers-go/modules/vault"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // LocalStackContainer wraps LocalStack container and its endpoint
@@ -49,14 +42,6 @@ type GCSMContainer struct {
 	Endpoint  string                   // empty for real API
 	Client    *secretmanager.Client
 	ProjectID string // GCP project ID for real API
-	Cleanup   func() error
-}
-
-// AzureKeyVaultContainer wraps Azure Key Vault emulator container and client
-type AzureKeyVaultContainer struct {
-	Container testcontainers.Container
-	VaultURL  string
-	Client    *azsecrets.Client
 	Cleanup   func() error
 }
 
@@ -259,109 +244,5 @@ func VerifyGCSMSecretExists(ctx context.Context, t *testing.T, gcsmContainer *GC
 	if err != nil {
 		t.Skipf("Skipping test: Secret '%s' does not exist or is not accessible. "+
 			"Please create it beforehand. See tests/end2end/GCSM_SETUP.md for instructions.", secretID)
-	}
-}
-
-// SetupAzureKeyVault starts an Azure Key Vault emulator container and returns the container info
-// Uses Lowkey Vault, a test double for Azure Key Vault that's compatible with Azure Key Vault REST APIs
-// Lowkey Vault is chosen over james-gould emulator because it doesn't require pre-generated SSL certificates,
-// making it much simpler to use in automated test environments
-func SetupAzureKeyVault(ctx context.Context, t *testing.T) *AzureKeyVaultContainer {
-	t.Helper()
-
-	// Lowkey Vault runs on port 8443 (HTTPS) by default
-	// Wait for the port to be ready - Lowkey Vault may take a moment to start
-	req := testcontainers.ContainerRequest{
-		Image:        "nagyesta/lowkey-vault:4.0.0-ubi9-minimal",
-		ExposedPorts: []string{"8443/tcp"},
-		WaitingFor:   wait.ForListeningPort("8443/tcp"),
-	}
-
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	if err != nil {
-		t.Fatalf("Failed to start Azure Key Vault emulator container: %v", err)
-	}
-
-	host, err := container.Host(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get Azure Key Vault emulator host: %v", err)
-	}
-
-	port, err := container.MappedPort(ctx, "8443/tcp")
-	if err != nil {
-		t.Fatalf("Failed to get Azure Key Vault emulator port: %v", err)
-	}
-
-	// Lowkey Vault uses HTTPS and expects vault URL format: https://host:port
-	vaultURL := fmt.Sprintf("https://%s:%s", host, port.Port())
-
-	// Lowkey Vault doesn't require real Azure credentials for testing
-	// Use ClientSecretCredential with dummy values - Lowkey Vault doesn't validate these
-	// Using a valid UUID format for tenant ID to avoid format errors
-	cred, err := azidentity.NewClientSecretCredential(
-		"00000000-0000-0000-0000-000000000000", // dummy tenant ID
-		"00000000-0000-0000-0000-000000000000", // dummy client ID
-		"dummy-secret",                          // dummy secret
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("Failed to create Azure credential: %v", err)
-	}
-
-	// Create client - Lowkey Vault uses self-signed certificates, so we need to configure TLS
-	// to skip certificate verification for testing
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true, // Skip certificate verification for testing
-		},
-	}
-	httpClient := &http.Client{
-		Transport: transport,
-	}
-
-	clientOptions := &azsecrets.ClientOptions{
-		ClientOptions: policy.ClientOptions{
-			Transport: httpClient,
-		},
-		DisableChallengeResourceVerification: true, // Required for Lowkey Vault emulator
-	}
-
-	client, err := azsecrets.NewClient(vaultURL, cred, clientOptions)
-	if err != nil {
-		t.Fatalf("Failed to create Azure Key Vault client: %v", err)
-	}
-
-	return &AzureKeyVaultContainer{
-		Container: container,
-		VaultURL:  vaultURL,
-		Client:    client,
-		Cleanup: func() error {
-			return container.Terminate(ctx)
-		},
-	}
-}
-
-// SetupAzureKeyVaultSecret creates a secret in Azure Key Vault emulator
-func SetupAzureKeyVaultSecret(ctx context.Context, t *testing.T, akvContainer *AzureKeyVaultContainer, secretName string, secretData map[string]interface{}) {
-	t.Helper()
-
-	// Marshal secret data to JSON
-	secretJSON, err := json.Marshal(secretData)
-	if err != nil {
-		t.Fatalf("Failed to marshal secret data: %v", err)
-	}
-
-	secretValue := string(secretJSON)
-
-	// Set the secret in Azure Key Vault
-	// SetSecret expects a SetSecretParameters struct with Value field
-	_, err = akvContainer.Client.SetSecret(ctx, secretName, azsecrets.SetSecretParameters{
-		Value: &secretValue,
-	}, nil)
-	if err != nil {
-		t.Fatalf("Failed to create secret in Azure Key Vault: %v", err)
 	}
 }
