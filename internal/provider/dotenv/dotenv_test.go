@@ -176,7 +176,7 @@ SECRET_VALUE=my-secret-value
 		t.Errorf("Expected 3 key-value pairs, got %d", len(result))
 	}
 
-	// Verify all keys are present and uppercased
+	// Verify all keys are present (preserving original case)
 	expectedKeys := map[string]string{
 		"API_KEY":      "test-api-key-123",
 		"DATABASE_URL": "postgres://localhost:5432/testdb",

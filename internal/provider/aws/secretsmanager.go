@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -76,8 +77,10 @@ func (p *SecretsManagerProvider) Fetch(ctx context.Context, mapID string, config
 	var secretData map[string]interface{}
 	if err := json.Unmarshal([]byte(*result.SecretString), &secretData); err != nil {
 		// If not JSON, treat as a single value
+		secretKey := strings.ToUpper(mapID) + "_SECRET"
+		log.Printf("WARN: Secret from provider '%s' is not JSON format. Secret loaded to %s", mapID, secretKey)
 		return []provider.KeyValue{
-			{Key: "SECRET", Value: *result.SecretString},
+			{Key: secretKey, Value: *result.SecretString},
 		}, nil
 	}
 
@@ -95,7 +98,7 @@ func (p *SecretsManagerProvider) Fetch(ctx context.Context, mapID string, config
 			}
 		} else if len(keys) == 0 {
 			// No keys specified means map everything
-			targetKey = strings.ToUpper(k)
+			targetKey = k
 		} else {
 			// Skip keys not in the mapping
 			continue

@@ -113,7 +113,7 @@ func (p *VaultProvider) Fetch(ctx context.Context, mapID string, config map[stri
 			}
 		} else if len(keys) == 0 {
 			// No keys specified means map everything
-			targetKey = strings.ToUpper(k)
+			targetKey = k
 		} else {
 			// Skip keys not in the mapping
 			continue

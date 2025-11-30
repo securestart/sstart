@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -89,8 +90,10 @@ func (p *AzureKeyVaultProvider) Fetch(ctx context.Context, mapID string, config 
 	var secretData map[string]interface{}
 	if err := json.Unmarshal([]byte(secretValue), &secretData); err != nil {
 		// If not JSON, treat as a single value
+		secretKey := strings.ToUpper(mapID) + "_SECRET"
+		log.Printf("WARN: Secret from provider '%s' is not JSON format. Secret loaded to %s", mapID, secretKey)
 		return []provider.KeyValue{
-			{Key: "SECRET", Value: secretValue},
+			{Key: secretKey, Value: secretValue},
 		}, nil
 	}
 
@@ -108,7 +111,7 @@ func (p *AzureKeyVaultProvider) Fetch(ctx context.Context, mapID string, config 
 			}
 		} else if len(keys) == 0 {
 			// No keys specified means map everything
-			targetKey = strings.ToUpper(k)
+			targetKey = k
 		} else {
 			// Skip keys not in the mapping
 			continue

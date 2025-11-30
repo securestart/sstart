@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/joho/godotenv"
 	"github.com/dirathea/sstart/internal/provider"
@@ -46,7 +45,7 @@ func (p *DotEnvProvider) Fetch(ctx context.Context, mapID string, config map[str
 		kvs := make([]provider.KeyValue, 0, len(envMap))
 		for k, v := range envMap {
 			kvs = append(kvs, provider.KeyValue{
-				Key:   strings.ToUpper(k),
+				Key:   k,
 				Value: v,
 			})
 		}
@@ -61,7 +60,7 @@ func (p *DotEnvProvider) Fetch(ctx context.Context, mapID string, config map[str
 				targetKey = envKey // Keep same name
 			}
 			kvs = append(kvs, provider.KeyValue{
-				Key:   strings.ToUpper(targetKey),
+				Key:   targetKey,
 				Value: value,
 			})
 		}

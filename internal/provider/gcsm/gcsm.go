@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"cloud.google.com/go/secretmanager/apiv1"
@@ -86,8 +87,10 @@ func (p *GCSMProvider) Fetch(ctx context.Context, mapID string, config map[strin
 	secretString := string(result.Payload.Data)
 	if err := json.Unmarshal([]byte(secretString), &secretData); err != nil {
 		// If not JSON, treat as a single value
+		secretKey := strings.ToUpper(mapID) + "_SECRET"
+		log.Printf("WARN: Secret from provider '%s' is not JSON format. Secret loaded to %s", mapID, secretKey)
 		return []provider.KeyValue{
-			{Key: "SECRET", Value: secretString},
+			{Key: secretKey, Value: secretString},
 		}, nil
 	}
 
@@ -105,7 +108,7 @@ func (p *GCSMProvider) Fetch(ctx context.Context, mapID string, config map[strin
 			}
 		} else if len(keys) == 0 {
 			// No keys specified means map everything
-			targetKey = strings.ToUpper(k)
+			targetKey = k
 		} else {
 			// Skip keys not in the mapping
 			continue
