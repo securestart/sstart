@@ -63,7 +63,9 @@ providers:
 If the secret value in AWS Secrets Manager is a JSON object, it will be automatically parsed and each key-value pair will be mapped according to the `keys` configuration. If `keys` is empty, all keys from the JSON will be mapped.
 
 **Plain Text Secrets:**
-If the secret value is plain text (not JSON), it will be mapped to a single environment variable named `<PROVIDER_ID>_SECRET` (where `<PROVIDER_ID>` is the provider's ID in uppercase). A warning will be logged indicating that the secret is not in JSON format.
+If the secret value is plain text (not JSON), it will be mapped to a single environment variable named `<PROVIDER_ID>_SECRET` (where `<PROVIDER_ID>` is the provider's ID in uppercase, with hyphens converted to underscores). A warning will be logged indicating that the secret is not in JSON format.
+
+For example, if the provider ID is `aws-prod`, the secret will be loaded to `AWS_PROD_SECRET`.
 
 ### Azure Key Vault (`azure_keyvault`)
 
@@ -98,7 +100,9 @@ providers:
 If the secret value in Azure Key Vault is a JSON object, it will be automatically parsed and each key-value pair will be mapped according to the `keys` configuration. If `keys` is empty, all keys from the JSON will be mapped.
 
 **Plain Text Secrets:**
-If the secret value is plain text (not JSON), it will be mapped to a single environment variable named `<PROVIDER_ID>_SECRET` (where `<PROVIDER_ID>` is the provider's ID in uppercase). A warning will be logged indicating that the secret is not in JSON format.
+If the secret value is plain text (not JSON), it will be mapped to a single environment variable named `<PROVIDER_ID>_SECRET` (where `<PROVIDER_ID>` is the provider's ID in uppercase, with hyphens converted to underscores). A warning will be logged indicating that the secret is not in JSON format.
+
+For example, if the provider ID is `aws-prod`, the secret will be loaded to `AWS_PROD_SECRET`.
 
 ### Dotenv (`dotenv`)
 
@@ -158,7 +162,9 @@ providers:
 If the secret value in Google Cloud Secret Manager is a JSON object, it will be automatically parsed and each key-value pair will be mapped according to the `keys` configuration. If `keys` is empty, all keys from the JSON will be mapped.
 
 **Plain Text Secrets:**
-If the secret value is plain text (not JSON), it will be mapped to a single environment variable named `<PROVIDER_ID>_SECRET` (where `<PROVIDER_ID>` is the provider's ID in uppercase). A warning will be logged indicating that the secret is not in JSON format.
+If the secret value is plain text (not JSON), it will be mapped to a single environment variable named `<PROVIDER_ID>_SECRET` (where `<PROVIDER_ID>` is the provider's ID in uppercase, with hyphens converted to underscores). A warning will be logged indicating that the secret is not in JSON format.
+
+For example, if the provider ID is `aws-prod`, the secret will be loaded to `AWS_PROD_SECRET`.
 
 ### HashiCorp Vault (`vault`)
 

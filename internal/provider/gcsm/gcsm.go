@@ -87,7 +87,7 @@ func (p *GCSMProvider) Fetch(ctx context.Context, mapID string, config map[strin
 	secretString := string(result.Payload.Data)
 	if err := json.Unmarshal([]byte(secretString), &secretData); err != nil {
 		// If not JSON, treat as a single value
-		secretKey := strings.ToUpper(mapID) + "_SECRET"
+		secretKey := strings.ToUpper(strings.ReplaceAll(mapID, "-", "_")) + "_SECRET"
 		log.Printf("WARN: Secret from provider '%s' is not JSON format. Secret loaded to %s", mapID, secretKey)
 		return []provider.KeyValue{
 			{Key: secretKey, Value: secretString},

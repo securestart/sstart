@@ -77,7 +77,7 @@ func (p *SecretsManagerProvider) Fetch(ctx context.Context, mapID string, config
 	var secretData map[string]interface{}
 	if err := json.Unmarshal([]byte(*result.SecretString), &secretData); err != nil {
 		// If not JSON, treat as a single value
-		secretKey := strings.ToUpper(mapID) + "_SECRET"
+		secretKey := strings.ToUpper(strings.ReplaceAll(mapID, "-", "_")) + "_SECRET"
 		log.Printf("WARN: Secret from provider '%s' is not JSON format. Secret loaded to %s", mapID, secretKey)
 		return []provider.KeyValue{
 			{Key: secretKey, Value: *result.SecretString},
