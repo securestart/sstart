@@ -13,14 +13,14 @@ import (
 // Runner executes subprocesses with injected secrets
 type Runner struct {
 	collector *secrets.Collector
-	resetEnv  bool
+	inherit   bool
 }
 
 // NewRunner creates a new runner instance
-func NewRunner(collector *secrets.Collector, resetEnv bool) *Runner {
+func NewRunner(collector *secrets.Collector, inherit bool) *Runner {
 	return &Runner{
 		collector: collector,
-		resetEnv:  resetEnv,
+		inherit:   inherit,
 	}
 }
 
@@ -34,7 +34,7 @@ func (r *Runner) Run(ctx context.Context, providerIDs []string, command []string
 
 	// Prepare environment
 	env := os.Environ()
-	if r.resetEnv {
+	if !r.inherit {
 		env = make([]string, 0)
 	}
 

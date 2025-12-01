@@ -32,14 +32,9 @@ Example:
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		// Determine resetEnv from config.Inherit (inverted)
-		// inherit=true means resetEnv=false (inherit system env)
-		// inherit=false means resetEnv=true (only use secrets)
-		resetEnvValue := !cfg.Inherit
-
 		// Create collector and runner
 		collector := secrets.NewCollector(cfg)
-		runner := app.NewRunner(collector, resetEnvValue)
+		runner := app.NewRunner(collector, cfg.Inherit)
 
 		// Run the command
 		return runner.Run(ctx, runProviders, args)
