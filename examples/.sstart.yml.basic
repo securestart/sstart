@@ -1,0 +1,8 @@
+# Basic Usage Example
+# This demonstrates the simplest sstart configuration with a single dotenv provider.
+# By default, inherit: true, so system environment variables are also available.
+
+providers:
+  - kind: dotenv
+    path: .env.basic
+
