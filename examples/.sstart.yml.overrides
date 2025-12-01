@@ -1,0 +1,22 @@
+# Overrides Example
+# This demonstrates how multiple providers can override each other.
+# Providers are processed in order - later providers override earlier ones for duplicate keys.
+#
+# In this example:
+# 1. .env.basic sets API_KEY, DATABASE_URL, APP_NAME
+# 2. .env.override overrides API_KEY and adds SECRET_TOKEN, ENVIRONMENT
+# Final result: API_KEY from .env.override, DATABASE_URL from .env.basic, 
+#               APP_NAME from .env.basic, SECRET_TOKEN from .env.override,
+#               ENVIRONMENT from .env.override
+
+providers:
+  # First provider - base configuration
+  - kind: dotenv
+    id: base
+    path: .env.basic
+
+  # Second provider - overrides some values and adds new ones
+  - kind: dotenv
+    id: override
+    path: .env.override
+

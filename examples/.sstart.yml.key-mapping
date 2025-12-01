@@ -1,0 +1,12 @@
+# Key Mapping Example
+# This demonstrates how to map source keys to different target environment variable names.
+# Useful when you want to rename variables or combine multiple sources.
+
+providers:
+  - kind: dotenv
+    path: .env.basic
+    keys:
+      API_KEY: API_SECRET_KEY           # Map API_KEY to API_SECRET_KEY
+      DATABASE_URL: DB_CONNECTION_STRING # Map DATABASE_URL to DB_CONNECTION_STRING
+      APP_NAME: ==                       # Keep APP_NAME as is
+

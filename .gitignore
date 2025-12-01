@@ -20,6 +20,8 @@ go.work
 
 # Configuration files with secrets
 .sstart.yml
+# Exception: allow example config files in examples directory
+!examples/.sstart.yml*
 .env
 .env.local
 .env.*.local

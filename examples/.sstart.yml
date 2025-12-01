@@ -1,0 +1,10 @@
+# Inherit False Example
+# This demonstrates using inherit: false to create a clean environment
+# with ONLY secrets from providers (no system environment variables).
+
+inherit: false  # Only use secrets from providers, don't inherit system environment variables
+
+providers:
+  - kind: dotenv
+    path: .env.basic
+

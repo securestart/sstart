@@ -3,14 +3,17 @@ sstart is a minimalist, zero-persistence CLI tool that securely retrieves applic
 
 It is the spiritual successor to the [Teller](https://github.com/tellerops/teller), modernized and rebuilt in Go for fast execution, reliability, and cross-platform simplicity.
 
-## 🎯 The Problem sstart Solves
-For local development, teams often choose between two bad options:
+## 🎯 Why sstart?
 
-1. Static .env files: Highly insecure, prone to being committed to Git, and impossible to audit.
+Say goodbye to `.env` files. With sstart, we eliminate the need for static `.env` files that store secrets in your project directory. Instead, secrets are pulled at runtime from secure backends like AWS Secrets Manager, Azure Key Vault, HashiCorp Vault, or GCP Secret Manager.
 
-2. Custom scripts: Complex, unmaintainable shell scripts that only talk to one vault and are difficult to standardize across projects.
+This approach provides multiple security benefits:
 
-sstart eliminates both. You define all your required secrets from all your sources (e.g., database password from Vault, API key from AWS) in a single, declarative .sstart.yml file.
+**🔒 Enhanced Security**: No more secrets sitting in files that could be accidentally committed to Git, shared in screenshots, or exposed through other common developer mistakes. Secrets are retrieved only when needed, directly from secure vaults.
+
+**🤖 AI Agent Protection**: In the era of AI-assisted coding, this is crucial. Static `.env` files expose secrets to AI agents that read project files during development. These secrets can be inadvertently included in prompts, code reviews, or context windows, creating a significant security vulnerability. With sstart, secrets are pulled at runtime and never stored in files that AI agents can access—only the configuration structure (`.sstart.yml`) is exposed, keeping your actual secrets safe.
+
+You define all your required secrets from all your sources in a single, declarative `.sstart.yml` file, and sstart handles the rest securely.
 
 ## Features
 
@@ -21,6 +24,39 @@ sstart eliminates both. You define all your required secrets from all your sourc
 - ⚙️ **YAML Configuration**: Easy-to-use configuration file
 
 ## Installation
+
+### Install from GitHub Releases (Recommended)
+
+Download the pre-built binary for your platform from the [latest release](https://github.com/dirathea/sstart/releases/latest):
+
+**Linux (amd64):**
+```bash
+curl -L https://github.com/dirathea/sstart/releases/latest/download/sstart_Linux_x86_64.tar.gz | tar -xz
+sudo mv sstart /usr/local/bin/
+```
+
+**macOS (amd64):**
+```bash
+curl -L https://github.com/dirathea/sstart/releases/latest/download/sstart_Darwin_x86_64.tar.gz | tar -xz
+sudo mv sstart /usr/local/bin/
+```
+
+**macOS (Apple Silicon/arm64):**
+```bash
+curl -L https://github.com/dirathea/sstart/releases/latest/download/sstart_Darwin_arm64.tar.gz | tar -xz
+sudo mv sstart /usr/local/bin/
+```
+
+**Windows:**
+```powershell
+# Download and extract from https://github.com/dirathea/sstart/releases/latest
+# Add sstart.exe to your PATH
+```
+
+**Using a specific version:**
+Replace `latest` with a version tag (e.g., `v1.0.0`) in the URLs above.
+
+### Install via Go
 
 ```bash
 go install github.com/dirathea/sstart/cmd/sstart@latest
