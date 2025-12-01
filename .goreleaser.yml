@@ -56,10 +56,10 @@ release:
     name: sstart
   mode: replace
   header: |
-    ## {{ .TagName }}
+    ## {{ .Tag }}
     {{ if .ReleaseNotes }}
     {{ .ReleaseNotes }}
     {{ else }}
-    Release {{ .TagName }}
+    Release {{ .Tag }}
     {{ end }}
 
