@@ -25,6 +25,7 @@ providers:
 |----------|--------|
 | `aws_secretsmanager` | Stable |
 | `azure_keyvault` | Stable |
+| `bitwarden` | Stable |
 | `dotenv` | Stable |
 | `gcloud_secretmanager` | Stable |
 | `vault` | Stable |
@@ -196,6 +197,61 @@ providers:
 
 **KV v1 and v2 Support:**
 The provider automatically detects and supports both KV v1 and KV v2 secret engines. For KV v2, the data is automatically extracted from the `data` key.
+
+### Bitwarden (`bitwarden`)
+
+Retrieves secrets from Bitwarden or Vaultwarden (self-hosted Bitwarden). Supports two formats: Note (JSON) or Fields (key-value pairs).
+
+**Configuration:**
+- `secret_id` (required): The ID of the secret item in Bitwarden
+- `server_url` (optional): The Bitwarden server URL (defaults to `BITWARDEN_SERVER_URL` environment variable or `https://vault.bitwarden.com`)
+- `email` (optional): The Bitwarden account email for authentication (required if `access_token` not provided)
+- `password` (optional): The Bitwarden account password for authentication (required if `access_token` not provided)
+- `access_token` (optional): The Bitwarden access token (if provided, `email` and `password` not needed)
+- `format` (optional): How to parse the secret: `note` (JSON) or `fields` (key-value pairs). Defaults to `note` if not specified.
+
+**Authentication:**
+Bitwarden authentication can be done via:
+- Email and password (login to get access token automatically)
+- Access token (provided directly or via `BITWARDEN_ACCESS_TOKEN` environment variable)
+
+**Example with Note format (JSON):**
+```yaml
+providers:
+  - kind: bitwarden
+    id: bitwarden-prod
+    server_url: https://vault.bitwarden.com
+    email: user@example.com
+    password: my-password
+    secret_id: abc123-def456-ghi789
+    format: note
+    keys:
+      API_KEY: ==
+      DATABASE_URL: ==
+```
+
+**Example with Fields format (key-value pairs):**
+```yaml
+providers:
+  - kind: bitwarden
+    id: bitwarden-prod
+    server_url: https://vault.bitwarden.com
+    access_token: your-access-token
+    secret_id: abc123-def456-ghi789
+    format: fields
+    keys:
+      API_KEY: BITWARDEN_API_KEY
+      DB_PASSWORD: BITWARDEN_DB_PASSWORD
+```
+
+**Note Format:**
+When `format: note` is specified, the provider parses the note content of the Bitwarden item as JSON. The note should contain a valid JSON object with key-value pairs.
+
+**Fields Format:**
+When `format: fields` is specified, the provider parses all custom fields of the Bitwarden item as key-value pairs. Each custom field's name becomes the key and its value becomes the environment variable value.
+
+**Vaultwarden Support:**
+The provider works with both official Bitwarden and self-hosted Vaultwarden. Simply set the `server_url` to your Vaultwarden instance URL.
 
 ## Template Variables
 
