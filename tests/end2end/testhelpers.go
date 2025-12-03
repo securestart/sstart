@@ -2,6 +2,8 @@ package end2end
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +22,7 @@ import (
 	"github.com/hashicorp/vault/api"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"golang.org/x/crypto/pbkdf2"
 	localstack "github.com/testcontainers/testcontainers-go/modules/localstack"
 	"github.com/testcontainers/testcontainers-go/modules/vault"
 )
@@ -325,25 +328,51 @@ func SetupVaultwardenSecret(ctx context.Context, t *testing.T, vaultwarden *Vaul
 	// Create HTTP client
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	// Step 1: Create user via admin API
-	// Vaultwarden admin API requires proper format
-	adminToken := "test-admin-token" // Set in container env
-	createUserURL := fmt.Sprintf("%s/admin/users", vaultwarden.URL)
-	createUserData := map[string]interface{}{
-		"email":    vaultwarden.Email,
-		"password": vaultwarden.Password,
-		"name":     "Test User",
+	// Step 1: Try to login first - if user exists, skip creation
+	testLoginURL := fmt.Sprintf("%s/identity/connect/token", vaultwarden.URL)
+	testDeviceIdentifier := "sstart-test"
+	testDeviceName := "sstart-test"
+	testDeviceType := "7" // 7 = CLI
+	testLoginData := fmt.Sprintf("grant_type=password&username=%s&password=%s&scope=api offline_access&client_id=web&device_identifier=%s&device_name=%s&device_type=%s",
+		vaultwarden.Email, vaultwarden.Password, testDeviceIdentifier, testDeviceName, testDeviceType)
+
+	testLoginReq, _ := http.NewRequestWithContext(ctx, "POST", testLoginURL, strings.NewReader(testLoginData))
+	testLoginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	testLoginResp, _ := client.Do(testLoginReq)
+	userExists := testLoginResp != nil && testLoginResp.StatusCode == http.StatusOK
+	if testLoginResp != nil {
+		testLoginResp.Body.Close()
 	}
-	createUserJSON, _ := json.Marshal(createUserData)
-	createUserReq, _ := http.NewRequestWithContext(ctx, "POST", createUserURL, strings.NewReader(string(createUserJSON)))
-	createUserReq.Header.Set("Content-Type", "application/json")
-	createUserReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", adminToken))
-	
-	createUserResp, err := client.Do(createUserReq)
-	if err == nil {
-		createUserResp.Body.Close()
-		// Wait a bit for user to be fully created
-		time.Sleep(500 * time.Millisecond)
+
+	// If user doesn't exist, create via public signup API
+	if !userExists {
+		// Hash password using PBKDF2 (Bitwarden uses PBKDF2 with 100000 iterations)
+		salt := []byte("sstart-test-salt") // Simple salt for testing
+		iterations := 100000
+		passwordHash := pbkdf2.Key([]byte(vaultwarden.Password), salt, iterations, 32, sha256.New)
+		masterPasswordHash := base64.StdEncoding.EncodeToString(passwordHash)
+
+		signupURL := fmt.Sprintf("%s/api/accounts/register", vaultwarden.URL)
+		signupData := map[string]interface{}{
+			"email":                vaultwarden.Email,
+			"masterPasswordHash":   masterPasswordHash,
+			"masterPasswordHint":   "",
+			"name":                 "Test User",
+			"keys":                 map[string]interface{}{},
+			"kdf":                  0, // PBKDF2
+			"kdfIterations":        iterations,
+			"referenceData":       map[string]interface{}{},
+		}
+		signupJSON, _ := json.Marshal(signupData)
+		signupReq, _ := http.NewRequestWithContext(ctx, "POST", signupURL, strings.NewReader(string(signupJSON)))
+		signupReq.Header.Set("Content-Type", "application/json")
+		
+		signupResp, _ := client.Do(signupReq)
+		if signupResp != nil {
+			signupResp.Body.Close()
+			// Wait a bit for user to be fully created
+			time.Sleep(1 * time.Second)
+		}
 	}
 
 	// Step 2: Login to get access token

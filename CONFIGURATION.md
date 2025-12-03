@@ -205,15 +205,12 @@ Retrieves secrets from Bitwarden or Vaultwarden (self-hosted Bitwarden). Support
 **Configuration:**
 - `secret_id` (required): The ID of the secret item in Bitwarden
 - `server_url` (optional): The Bitwarden server URL (defaults to `BITWARDEN_SERVER_URL` environment variable or `https://vault.bitwarden.com`)
-- `email` (optional): The Bitwarden account email for authentication (required if `access_token` not provided)
-- `password` (optional): The Bitwarden account password for authentication (required if `access_token` not provided)
-- `access_token` (optional): The Bitwarden access token (if provided, `email` and `password` not needed)
 - `format` (optional): How to parse the secret: `note` (JSON) or `fields` (key-value pairs). Defaults to `note` if not specified.
 
 **Authentication:**
-Bitwarden authentication can be done via:
-- Email and password (login to get access token automatically)
-- Access token (provided directly or via `BITWARDEN_ACCESS_TOKEN` environment variable)
+Bitwarden authentication must be provided via environment variables (credentials should never be stored in the config file):
+- `BITWARDEN_ACCESS_TOKEN`: The Bitwarden access token (preferred method)
+- OR `BITWARDEN_EMAIL` and `BITWARDEN_PASSWORD`: Email and password (will login automatically to get access token)
 
 **Example with Note format (JSON):**
 ```yaml
@@ -221,13 +218,19 @@ providers:
   - kind: bitwarden
     id: bitwarden-prod
     server_url: https://vault.bitwarden.com
-    email: user@example.com
-    password: my-password
     secret_id: abc123-def456-ghi789
     format: note
     keys:
       API_KEY: ==
       DATABASE_URL: ==
+```
+
+Set environment variables:
+```bash
+export BITWARDEN_ACCESS_TOKEN="your-access-token"
+# OR
+export BITWARDEN_EMAIL="user@example.com"
+export BITWARDEN_PASSWORD="my-password"
 ```
 
 **Example with Fields format (key-value pairs):**
@@ -236,7 +239,6 @@ providers:
   - kind: bitwarden
     id: bitwarden-prod
     server_url: https://vault.bitwarden.com
-    access_token: your-access-token
     secret_id: abc123-def456-ghi789
     format: fields
     keys:

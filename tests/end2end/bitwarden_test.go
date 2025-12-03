@@ -36,19 +36,26 @@ func TestE2E_Bitwarden_NoteFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, ".sstart.yml")
 
+	// Set environment variables for authentication
+	os.Setenv("BITWARDEN_SERVER_URL", vaultwarden.URL)
+	os.Setenv("BITWARDEN_ACCESS_TOKEN", accessToken)
+	defer func() {
+		os.Unsetenv("BITWARDEN_SERVER_URL")
+		os.Unsetenv("BITWARDEN_ACCESS_TOKEN")
+	}()
+
 	configYAML := fmt.Sprintf(`
 providers:
   - kind: bitwarden
     id: bitwarden-test
     server_url: %s
-    access_token: %s
     secret_id: %s
     format: note
     keys:
       API_KEY: BITWARDEN_API_KEY
       DB_PASSWORD: BITWARDEN_DB_PASSWORD
       JWT_SECRET: ==
-`, vaultwarden.URL, accessToken, itemID)
+`, vaultwarden.URL, itemID)
 
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
@@ -120,19 +127,26 @@ func TestE2E_Bitwarden_FieldsFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, ".sstart.yml")
 
+	// Set environment variables for authentication
+	os.Setenv("BITWARDEN_SERVER_URL", vaultwarden.URL)
+	os.Setenv("BITWARDEN_ACCESS_TOKEN", accessToken)
+	defer func() {
+		os.Unsetenv("BITWARDEN_SERVER_URL")
+		os.Unsetenv("BITWARDEN_ACCESS_TOKEN")
+	}()
+
 	configYAML := fmt.Sprintf(`
 providers:
   - kind: bitwarden
     id: bitwarden-test
     server_url: %s
-    access_token: %s
     secret_id: %s
     format: fields
     keys:
       API_KEY: BITWARDEN_API_KEY
       DB_PASSWORD: BITWARDEN_DB_PASSWORD
       JWT_SECRET: ==
-`, vaultwarden.URL, accessToken, itemID)
+`, vaultwarden.URL, itemID)
 
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
@@ -204,15 +218,22 @@ func TestE2E_Bitwarden_NoKeys(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, ".sstart.yml")
 
+	// Set environment variables for authentication
+	os.Setenv("BITWARDEN_SERVER_URL", vaultwarden.URL)
+	os.Setenv("BITWARDEN_ACCESS_TOKEN", accessToken)
+	defer func() {
+		os.Unsetenv("BITWARDEN_SERVER_URL")
+		os.Unsetenv("BITWARDEN_ACCESS_TOKEN")
+	}()
+
 	configYAML := fmt.Sprintf(`
 providers:
   - kind: bitwarden
     id: bitwarden-test
     server_url: %s
-    access_token: %s
     secret_id: %s
     format: note
-`, vaultwarden.URL, accessToken, itemID)
+`, vaultwarden.URL, itemID)
 
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
@@ -283,16 +304,24 @@ func TestE2E_Bitwarden_EmailPasswordAuth(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, ".sstart.yml")
 
+	// Set environment variables for authentication
+	os.Setenv("BITWARDEN_SERVER_URL", vaultwarden.URL)
+	os.Setenv("BITWARDEN_EMAIL", vaultwarden.Email)
+	os.Setenv("BITWARDEN_PASSWORD", vaultwarden.Password)
+	defer func() {
+		os.Unsetenv("BITWARDEN_SERVER_URL")
+		os.Unsetenv("BITWARDEN_EMAIL")
+		os.Unsetenv("BITWARDEN_PASSWORD")
+	}()
+
 	configYAML := fmt.Sprintf(`
 providers:
   - kind: bitwarden
     id: bitwarden-test
     server_url: %s
-    email: %s
-    password: %s
     secret_id: %s
     format: note
-`, vaultwarden.URL, vaultwarden.Email, vaultwarden.Password, itemID)
+`, vaultwarden.URL, itemID)
 
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)

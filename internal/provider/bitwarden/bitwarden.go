@@ -14,15 +14,11 @@ import (
 )
 
 // BitwardenConfig represents the configuration for Bitwarden provider
+// Note: Authentication credentials (email, password, access_token) must be provided via environment variables
+// BITWARDEN_EMAIL, BITWARDEN_PASSWORD, or BITWARDEN_ACCESS_TOKEN
 type BitwardenConfig struct {
-	// ServerURL is the Bitwarden server URL (optional, defaults to https://vault.bitwarden.com)
+	// ServerURL is the Bitwarden server URL (optional, defaults to BITWARDEN_SERVER_URL env var or https://vault.bitwarden.com)
 	ServerURL string `json:"server_url,omitempty" yaml:"server_url,omitempty"`
-	// Email is the Bitwarden account email for authentication (required if access_token not provided)
-	Email string `json:"email,omitempty" yaml:"email,omitempty"`
-	// Password is the Bitwarden account password for authentication (required if access_token not provided)
-	Password string `json:"password,omitempty" yaml:"password,omitempty"`
-	// AccessToken is the Bitwarden access token (optional, if provided, email/password not needed)
-	AccessToken string `json:"access_token,omitempty" yaml:"access_token,omitempty"`
 	// SecretID is the ID of the secret item in Bitwarden (required)
 	SecretID string `json:"secret_id" yaml:"secret_id"`
 	// Format specifies how to parse the secret: "note" (JSON) or "fields" (key-value pairs)
@@ -77,25 +73,16 @@ func (p *BitwardenProvider) Fetch(ctx context.Context, mapID string, config map[
 	// Ensure server URL doesn't end with /
 	serverURL = strings.TrimSuffix(serverURL, "/")
 
-	// Get access token
-	accessToken := cfg.AccessToken
-	if accessToken == "" {
-		accessToken = getEnvOrDefault("BITWARDEN_ACCESS_TOKEN", "")
-	}
+	// Get access token from environment variable only
+	accessToken := getEnv("BITWARDEN_ACCESS_TOKEN")
 
-	// If no access token, try to login
+	// If no access token, try to login using email/password from environment variables
 	if accessToken == "" {
-		email := cfg.Email
-		if email == "" {
-			email = getEnvOrDefault("BITWARDEN_EMAIL", "")
-		}
-		password := cfg.Password
-		if password == "" {
-			password = getEnvOrDefault("BITWARDEN_PASSWORD", "")
-		}
+		email := getEnv("BITWARDEN_EMAIL")
+		password := getEnv("BITWARDEN_PASSWORD")
 
 		if email == "" || password == "" {
-			return nil, fmt.Errorf("bitwarden provider requires either 'access_token' or 'email' and 'password' in configuration (or environment variables BITWARDEN_ACCESS_TOKEN or BITWARDEN_EMAIL/BITWARDEN_PASSWORD)")
+			return nil, fmt.Errorf("bitwarden provider requires either BITWARDEN_ACCESS_TOKEN or both BITWARDEN_EMAIL and BITWARDEN_PASSWORD environment variables")
 		}
 
 		var err error
