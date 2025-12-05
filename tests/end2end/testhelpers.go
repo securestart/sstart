@@ -16,9 +16,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/hashicorp/vault/api"
-	"github.com/testcontainers/testcontainers-go"
 	localstack "github.com/testcontainers/testcontainers-go/modules/localstack"
 	"github.com/testcontainers/testcontainers-go/modules/vault"
+	"github.com/testcontainers/testcontainers-go"
 )
 
 // LocalStackContainer wraps LocalStack container and its endpoint
@@ -246,3 +246,4 @@ func VerifyGCSMSecretExists(ctx context.Context, t *testing.T, gcsmContainer *GC
 			"Please create it beforehand. See tests/end2end/GCSM_SETUP.md for instructions.", secretID)
 	}
 }
+
