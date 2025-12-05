@@ -1,16 +1,73 @@
 project_name: sstart
 
 builds:
-  - id: sstart
+  - id: sstart-linux-amd64
     main: ./cmd/sstart
     binary: sstart
     goos:
       - linux
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+      - CGO_LDFLAGS=-lm
+    ldflags:
+      - -s -w
+      - -X github.com/dirathea/sstart/internal/cli.version={{.Version}}
+      - -X github.com/dirathea/sstart/internal/cli.commit={{.Commit}}
+      - -X github.com/dirathea/sstart/internal/cli.date={{.Date}}
+  - id: sstart-linux-arm64
+    main: ./cmd/sstart
+    binary: sstart
+    goos:
+      - linux
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+      - CGO_LDFLAGS=-lm
+    ldflags:
+      - -s -w
+      - -X github.com/dirathea/sstart/internal/cli.version={{.Version}}
+      - -X github.com/dirathea/sstart/internal/cli.commit={{.Commit}}
+      - -X github.com/dirathea/sstart/internal/cli.date={{.Date}}
+  - id: sstart-darwin-amd64
+    main: ./cmd/sstart
+    binary: sstart
+    goos:
       - darwin
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=1
+      - CGO_LDFLAGS=-lm
+    ldflags:
+      - -s -w
+      - -X github.com/dirathea/sstart/internal/cli.version={{.Version}}
+      - -X github.com/dirathea/sstart/internal/cli.commit={{.Commit}}
+      - -X github.com/dirathea/sstart/internal/cli.date={{.Date}}
+  - id: sstart-darwin-arm64
+    main: ./cmd/sstart
+    binary: sstart
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+      - CGO_LDFLAGS=-lm
+    ldflags:
+      - -s -w
+      - -X github.com/dirathea/sstart/internal/cli.version={{.Version}}
+      - -X github.com/dirathea/sstart/internal/cli.commit={{.Commit}}
+      - -X github.com/dirathea/sstart/internal/cli.date={{.Date}}
+  - id: sstart-windows-amd64
+    main: ./cmd/sstart
+    binary: sstart
+    goos:
       - windows
     goarch:
       - amd64
-      - arm64
     env:
       - CGO_ENABLED=1
       - CGO_LDFLAGS=-lm

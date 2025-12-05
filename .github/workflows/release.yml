@@ -59,7 +59,20 @@ jobs:
   release:
     name: Build and Release
     needs: test
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - build_id: sstart-linux-amd64
+            runner: ubuntu-latest
+          - build_id: sstart-linux-arm64
+            runner: ubuntu-latest
+          - build_id: sstart-darwin-amd64
+            runner: macos-latest
+          - build_id: sstart-darwin-arm64
+            runner: macos-latest
+          - build_id: sstart-windows-amd64
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -71,23 +84,70 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install cross-compilation toolchains
+      - name: Install Linux ARM64 cross-compilation toolchain (Linux ARM64 only)
+        if: matrix.build_id == 'sstart-linux-arm64'
         run: |
           sudo apt-get update
-          # Install Linux ARM64 cross-compilation toolchain
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-          # Set CC and CXX for Linux ARM64 cross-compilation
-          echo "CC_aarch64_linux=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CXX_aarch64_linux=aarch64-linux-gnu-g++" >> $GITHUB_ENV
-          # Note: darwin/arm64 cross-compilation from Linux is complex and may not work with CGO
-          # If it fails, we may need to use a macOS runner or disable CGO for darwin/arm64
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          echo "AR=aarch64-linux-gnu-ar" >> $GITHUB_ENV
+          echo "AS=aarch64-linux-gnu-as" >> $GITHUB_ENV
 
-      - name: Run GoReleaser
+      - name: Run GoReleaser (build only)
         uses: goreleaser/goreleaser-action@v5
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean
+          args: build --clean --id=${{ matrix.build_id }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.build_id }}
+          path: dist/*
+          retention-days: 1
+
+  package:
+    name: Package and Release
+    needs: release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Prepare dist directory for GoReleaser
+        run: |
+          mkdir -p dist
+          # GoReleaser expects binaries in dist/ with specific naming
+          # Copy binaries maintaining GoReleaser's expected structure
+          for dir in dist-artifacts/*/; do
+            if [ -d "$dir" ]; then
+              cp -r "$dir"* dist/ 2>/dev/null || true
+            fi
+          done
+
+      - name: Run GoReleaser (package and release)
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean --skip-build --skip-validate
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

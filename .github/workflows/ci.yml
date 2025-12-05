@@ -60,7 +60,25 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-latest
+          - goos: darwin
+            goarch: amd64
+            runner: macos-latest
+          - goos: darwin
+            goarch: arm64
+            runner: macos-latest
+          - goos: windows
+            goarch: amd64
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -70,30 +88,29 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install cross-compilation toolchains
+      - name: Install Linux ARM64 cross-compilation toolchain (Linux ARM64 only)
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
         run: |
           sudo apt-get update
-          # Install Linux ARM64 cross-compilation toolchain
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-          # Set CC and CXX for Linux ARM64 cross-compilation
-          echo "CC_aarch64_linux=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CXX_aarch64_linux=aarch64-linux-gnu-g++" >> $GITHUB_ENV
-          # Note: darwin/arm64 cross-compilation from Linux is complex and may not work with CGO
-          # If it fails, we may need to use a macOS runner or disable CGO for darwin/arm64
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          echo "AR=aarch64-linux-gnu-ar" >> $GITHUB_ENV
+          echo "AS=aarch64-linux-gnu-as" >> $GITHUB_ENV
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
-        with:
-          distribution: goreleaser
-          version: latest
-          args: build --snapshot --clean
+      - name: Build binary
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CGO_ENABLED: 1
+          CGO_LDFLAGS: -lm
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build -ldflags="-s -w -X github.com/dirathea/sstart/internal/cli.version=snapshot -X github.com/dirathea/sstart/internal/cli.commit=${{ github.sha }} -X github.com/dirathea/sstart/internal/cli.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o sstart${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/sstart
 
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sstart-binaries
-          path: dist/*
+          name: sstart-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+          path: sstart${{ matrix.goos == 'windows' && '.exe' || '' }}
           retention-days: 1
 
