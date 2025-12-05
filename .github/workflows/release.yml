@@ -35,6 +35,16 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Install Bitwarden CLI
+        run: |
+          BW_VERSION=$(curl -s https://api.github.com/repos/bitwarden/cli/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          curl -L "https://github.com/bitwarden/cli/releases/download/${BW_VERSION}/bw-linux-${BW_VERSION}.zip" -o bw.zip
+          unzip -q bw.zip
+          chmod +x bw
+          sudo mv bw /usr/local/bin/
+          rm bw.zip
+          bw --version
+
       - name: Run end-to-end tests
         env:
           CGO_LDFLAGS: -lm
@@ -60,6 +70,17 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Install cross-compilation toolchains
+        run: |
+          sudo apt-get update
+          # Install Linux ARM64 cross-compilation toolchain
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          # Set CC and CXX for Linux ARM64 cross-compilation
+          echo "CC_aarch64_linux=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX_aarch64_linux=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          # Note: darwin/arm64 cross-compilation from Linux is complex and may not work with CGO
+          # If it fails, we may need to use a macOS runner or disable CGO for darwin/arm64
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
