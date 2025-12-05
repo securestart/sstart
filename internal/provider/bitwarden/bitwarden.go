@@ -110,11 +110,11 @@ func (p *BitwardenProvider) Fetch(ctx context.Context, mapID string, config map[
 
 	// Validate format
 	format := strings.ToLower(cfg.Format)
-	if format != "" && format != "note" && format != "fields" && format != "login" {
-		return nil, fmt.Errorf("bitwarden provider 'format' must be either 'note', 'fields', or 'login' (got: %s)", cfg.Format)
+	if format != "" && format != "note" && format != "fields" && format != "both" && format != "login" {
+		return nil, fmt.Errorf("bitwarden provider 'format' must be either 'note', 'fields', 'both', or 'login' (got: %s)", cfg.Format)
 	}
 	if format == "" {
-		format = "fields" // Default to fields format
+		format = "both" // Default to both format
 	}
 
 	// Determine bw path
@@ -214,6 +214,41 @@ func (p *BitwardenProvider) Fetch(ctx context.Context, mapID string, config map[
 			if field.Type == 0 || field.Type == 1 { // Text or Hidden
 				secretData[field.Name] = field.Value
 			}
+		}
+	case "both":
+		// Parse both notes and fields, with fields taking precedence
+		secretData = make(map[string]interface{})
+		
+		// First, parse notes as JSON (if available)
+		if item.Notes != "" {
+			var noteData map[string]interface{}
+			if err := json.Unmarshal([]byte(item.Notes), &noteData); err == nil {
+				// Add all note data first
+				for k, v := range noteData {
+					secretData[k] = v
+				}
+			}
+		}
+		
+		// Then, add fields (which will override any duplicate keys from notes)
+		for _, field := range item.Fields {
+			if field.Type == 0 || field.Type == 1 { // Text or Hidden
+				secretData[field.Name] = field.Value
+			}
+		}
+		
+		// Also include login credentials if available
+		if item.Login != nil {
+			if item.Login.Username != "" {
+				secretData["username"] = item.Login.Username
+			}
+			if item.Login.Password != "" {
+				secretData["password"] = item.Login.Password
+			}
+		}
+		
+		if len(secretData) == 0 {
+			return nil, fmt.Errorf("bitwarden item '%s' has no fields or notes for 'both' format", cfg.ItemID)
 		}
 	default: // fields
 		// Extract custom fields

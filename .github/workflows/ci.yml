@@ -40,6 +40,11 @@ jobs:
       - name: Run end-to-end tests
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          SSTART_E2E_BITWARDEN_ORGANIZATION_ID: ${{ secrets.SSTART_E2E_BITWARDEN_ORGANIZATION_ID }}
+          BITWARDEN_SM_ACCESS_TOKEN: ${{ secrets.BITWARDEN_SM_ACCESS_TOKEN }}
+          BW_PASSWORD: ${{ secrets.BW_PASSWORD }}
+          BW_CLIENTSECRET: ${{ secrets.BW_CLIENTSECRET }}
+          BW_CLIENTID: ${{ secrets.BW_CLIENTID }}
         run: go test -v ./tests/end2end/...
 
   build:

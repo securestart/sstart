@@ -26,6 +26,7 @@ providers:
 | `aws_secretsmanager` | Stable |
 | `azure_keyvault` | Stable |
 | `bitwarden` | Stable |
+| `bitwarden_sm` | Stable |
 | `dotenv` | Stable |
 | `gcloud_secretmanager` | Stable |
 | `vault` | Stable |
@@ -200,17 +201,27 @@ The provider automatically detects and supports both KV v1 and KV v2 secret engi
 
 ### Bitwarden (`bitwarden`)
 
-Retrieves secrets from Bitwarden or Vaultwarden (self-hosted Bitwarden). Supports two formats: Note (JSON) or Fields (key-value pairs).
+Retrieves secrets from Bitwarden or Vaultwarden (self-hosted Bitwarden) personal vault using the Bitwarden CLI. Supports two formats: Note (JSON) or Fields (key-value pairs). Only Secure Note items (type 2) are supported.
+
+**Dependencies:**
+- Bitwarden CLI (`bw`) must be installed and available in your PATH. Install from https://bitwarden.com/help/cli/
 
 **Configuration:**
-- `secret_id` (required): The ID of the secret item in Bitwarden
-- `server_url` (optional): The Bitwarden server URL (defaults to `BITWARDEN_SERVER_URL` environment variable or `https://vault.bitwarden.com`)
-- `format` (optional): How to parse the secret: `note` (JSON) or `fields` (key-value pairs). Defaults to `note` if not specified.
+- `item_id` (required): The ID of the item in Bitwarden vault. Can be found using `bw list items --search "item name"` or via Bitwarden web vault. Must be a Secure Note item (type 2)
+- `format` (optional): How to parse the secret: `note` (JSON), `fields` (key-value pairs), or `both` (both notes and fields with fields taking precedence). Defaults to `both` if not specified
+- `bw_path` (optional): Path to the Bitwarden CLI binary (defaults to `bw` in PATH)
+- `server_url` (optional): The Bitwarden server URL (defaults to `BW_SERVER_URL` environment variable or `https://vault.bitwarden.com`)
+- `api_port` (optional): Port for the local API server (defaults to `8087`)
+- `api_hostname` (optional): Hostname for the local API server (defaults to `localhost`)
 
 **Authentication:**
 Bitwarden authentication must be provided via environment variables (credentials should never be stored in the config file):
-- `BITWARDEN_ACCESS_TOKEN`: The Bitwarden access token (preferred method)
-- OR `BITWARDEN_EMAIL` and `BITWARDEN_PASSWORD`: Email and password (will login automatically to get access token)
+- `BW_CLIENTID` (required): Bitwarden API client ID
+- `BW_CLIENTSECRET` (required): Bitwarden API client secret
+- `BW_PASSWORD` (required): Master password for unlocking the vault
+- `BW_SERVER_URL` (optional): Bitwarden server URL for self-hosted instances
+- `BW_PATH` (optional): Path to Bitwarden CLI binary if not in PATH
+- `BW_SESSION` (optional): Existing session key (can be reused if already set)
 
 **Example with Note format (JSON):**
 ```yaml
@@ -218,7 +229,7 @@ providers:
   - kind: bitwarden
     id: bitwarden-prod
     server_url: https://vault.bitwarden.com
-    secret_id: abc123-def456-ghi789
+    item_id: abc123-def456-ghi789
     format: note
     keys:
       API_KEY: ==
@@ -227,10 +238,11 @@ providers:
 
 Set environment variables:
 ```bash
-export BITWARDEN_ACCESS_TOKEN="your-access-token"
-# OR
-export BITWARDEN_EMAIL="user@example.com"
-export BITWARDEN_PASSWORD="my-password"
+export BW_CLIENTID="your-client-id"
+export BW_CLIENTSECRET="your-client-secret"
+export BW_PASSWORD="your-master-password"
+# Optional for self-hosted instances:
+export BW_SERVER_URL="https://vaultwarden.example.com"
 ```
 
 **Example with Fields format (key-value pairs):**
@@ -239,21 +251,120 @@ providers:
   - kind: bitwarden
     id: bitwarden-prod
     server_url: https://vault.bitwarden.com
-    secret_id: abc123-def456-ghi789
+    item_id: abc123-def456-ghi789
     format: fields
     keys:
       API_KEY: BITWARDEN_API_KEY
       DB_PASSWORD: BITWARDEN_DB_PASSWORD
 ```
 
+**Example with Both format (notes and fields):**
+```yaml
+providers:
+  - kind: bitwarden
+    id: bitwarden-prod
+    server_url: https://vault.bitwarden.com
+    item_id: abc123-def456-ghi789
+    format: both
+    keys:
+      API_KEY: ==
+      DB_PASSWORD: ==
+```
+
 **Note Format:**
 When `format: note` is specified, the provider parses the note content of the Bitwarden item as JSON. The note should contain a valid JSON object with key-value pairs.
 
 **Fields Format:**
-When `format: fields` is specified, the provider parses all custom fields of the Bitwarden item as key-value pairs. Each custom field's name becomes the key and its value becomes the environment variable value.
+When `format: fields` is specified, the provider parses all custom fields of the Bitwarden item as key-value pairs. Each custom field's name becomes the key and its value becomes the environment variable value. If no custom fields are found, it will attempt to parse notes as JSON as a fallback.
+
+**Both Format:**
+When `format: both` is specified (or when `format` is not specified, as it's the default), the provider parses both the note content (as JSON) and all custom fields. If there are duplicate keys between notes and fields, the field values take precedence over note values. This allows you to use notes for most secrets and override specific values with custom fields.
 
 **Vaultwarden Support:**
 The provider works with both official Bitwarden and self-hosted Vaultwarden. Simply set the `server_url` to your Vaultwarden instance URL.
+
+**How it works:**
+The provider uses the Bitwarden CLI's REST API server (`bw serve`) to access your vault. It automatically starts a local API server, authenticates using your API credentials, unlocks the vault with your master password, and retrieves the specified Secure Note item.
+
+**Supported Item Types:**
+Only Secure Note items (type 2) are supported. Login items (type 1) and other item types are not supported.
+
+### Bitwarden Secret Manager (`bitwarden_sm`)
+
+Retrieves secrets from Bitwarden Secret Manager (organizational secrets). This provider uses the Bitwarden SDK to access secrets stored in a Secret Manager organization and project.
+
+**Dependencies:**
+- No CLI required. Uses the Bitwarden Go SDK directly.
+
+**Configuration:**
+- `organization_id` (required): The ID of the organization in Bitwarden Secret Manager
+- `project_id` (required): The ID of the project in Bitwarden Secret Manager
+- `server_url` (optional): The Bitwarden server URL (defaults to `BITWARDEN_SERVER_URL` environment variable or `https://vault.bitwarden.com`)
+
+**Authentication:**
+Bitwarden Secret Manager authentication must be provided via environment variables:
+- `BITWARDEN_SM_ACCESS_TOKEN` (required): Access token for Bitwarden Secret Manager API authentication
+- `BITWARDEN_SERVER_URL` (optional): Bitwarden server URL for self-hosted instances (defaults to `https://vault.bitwarden.com`)
+
+**Example:**
+```yaml
+providers:
+  - kind: bitwarden_sm
+    id: bitwarden-sm-prod
+    organization_id: org-abc123-def456
+    project_id: proj-ghi789-jkl012
+    server_url: https://vault.bitwarden.com
+    keys:
+      API_KEY: ==
+      DATABASE_URL: ==
+```
+
+Set environment variables:
+```bash
+export BITWARDEN_SM_ACCESS_TOKEN="your-access-token"
+# Optional for self-hosted instances:
+export BITWARDEN_SERVER_URL="https://vaultwarden.example.com"
+```
+
+**How secrets are retrieved:**
+The provider fetches all secrets from the specified project in the organization. Each secret is retrieved using only its Key and Value fields. The Note field is not parsed or used - only the Key-Value pairs are extracted and made available as environment variables.
+
+**Vaultwarden Support:**
+The provider works with both official Bitwarden Secret Manager and self-hosted Vaultwarden. Simply set the `server_url` to your Vaultwarden instance URL.
+
+### Choosing Between Bitwarden and Bitwarden Secret Manager
+
+Bitwarden offers two distinct products for secrets management, each designed for different use cases:
+
+**Bitwarden (`bitwarden`) - Personal Vault:**
+- **Purpose**: Individual password and secrets management
+- **Use Case**: Personal vault items, individual developer secrets, or small-scale secret storage
+- **Access Method**: Uses Bitwarden CLI (`bw`) with personal account credentials
+- **Authentication**: Requires API client ID/secret and master password
+- **Organization**: Items stored in personal vault, organized by folders and collections
+- **Access Control**: Single-user access (your personal vault)
+- **Best For**: Individual developers, personal projects, or when you need to access your personal Bitwarden vault items
+
+**Bitwarden Secret Manager (`bitwarden_sm`) - Organizational Secrets:**
+- **Purpose**: Enterprise secrets management for DevOps and cybersecurity teams
+- **Use Case**: Organizational secrets, CI/CD pipelines, infrastructure secrets, team collaboration
+- **Access Method**: Uses Bitwarden SDK with machine accounts and access tokens
+- **Authentication**: Requires access token (generated for machine accounts)
+- **Organization**: Secrets organized in Projects within an Organization
+- **Access Control**: Multi-user, role-based access with fine-grained permissions
+- **Best For**: Teams, organizations, production deployments, automated systems, and when you need centralized secret management with access control
+
+**Key Differences:**
+- **Bitwarden** is part of the Password Manager product and uses the CLI to access personal vault items
+- **Bitwarden Secret Manager** is a separate product designed for organizational secrets management with Projects, Machine Accounts, and Access Tokens (see [Bitwarden Secrets Manager Overview](https://bitwarden.com/help/secrets-manager-overview/))
+- **Bitwarden** requires the CLI to be installed and uses `bw serve` for local API access
+- **Bitwarden Secret Manager** uses the SDK directly and doesn't require CLI installation
+- **Bitwarden** stores items in your personal vault (passwords, secure notes, etc.)
+- **Bitwarden Secret Manager** stores secrets in organizational projects with structured key-value pairs
+
+**When to use each:**
+- Use `bitwarden` if you're working with your personal Bitwarden vault and need to retrieve Secure Note items (with JSON notes or custom fields)
+- Use `bitwarden_sm` if you're part of an organization using Bitwarden Secret Manager and need to retrieve secrets from organizational projects (like API keys for production deployments)
 
 ## Template Variables
 

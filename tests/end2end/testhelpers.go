@@ -2,12 +2,8 @@ package end2end
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -20,11 +16,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/hashicorp/vault/api"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
-	"golang.org/x/crypto/pbkdf2"
 	localstack "github.com/testcontainers/testcontainers-go/modules/localstack"
 	"github.com/testcontainers/testcontainers-go/modules/vault"
+	"github.com/testcontainers/testcontainers-go"
 )
 
 // LocalStackContainer wraps LocalStack container and its endpoint
@@ -48,15 +42,6 @@ type GCSMContainer struct {
 	Endpoint  string                   // empty for real API
 	Client    *secretmanager.Client
 	ProjectID string // GCP project ID for real API
-	Cleanup   func() error
-}
-
-// VaultwardenContainer wraps Vaultwarden container, URL, and credentials
-type VaultwardenContainer struct {
-	Container testcontainers.Container
-	URL       string
-	Email     string
-	Password  string
 	Cleanup   func() error
 }
 
@@ -262,215 +247,3 @@ func VerifyGCSMSecretExists(ctx context.Context, t *testing.T, gcsmContainer *GC
 	}
 }
 
-// SetupVaultwarden starts a Vaultwarden container and returns the container info
-func SetupVaultwarden(ctx context.Context, t *testing.T) *VaultwardenContainer {
-	t.Helper()
-
-	// Create a generic container request for vaultwarden
-	req := testcontainers.ContainerRequest{
-		Image:        "vaultwarden/server:latest",
-		ExposedPorts: []string{"80/tcp"},
-		Env: map[string]string{
-			"ADMIN_TOKEN":                "test-admin-token",
-			"SIGNUPS_ALLOWED":            "true",
-			"I_REALLY_WANT_VOLATILE_STORAGE": "true",
-		},
-		WaitingFor: wait.ForHTTP("/").
-			WithPort("80").
-			WithStartupTimeout(60 * time.Second),
-	}
-
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	if err != nil {
-		t.Fatalf("Failed to start vaultwarden container: %v", err)
-	}
-
-	host, err := container.Host(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get vaultwarden host: %v", err)
-	}
-
-	port, err := container.MappedPort(ctx, "80/tcp")
-	if err != nil {
-		t.Fatalf("Failed to get vaultwarden port: %v", err)
-	}
-
-	url := fmt.Sprintf("http://%s:%s", host, port.Port())
-
-	// Default test credentials
-	email := "test@example.com"
-	password := "test-password-123"
-
-	return &VaultwardenContainer{
-		Container: container,
-		URL:       url,
-		Email:     email,
-		Password:  password,
-		Cleanup: func() error {
-			return container.Terminate(ctx)
-		},
-	}
-}
-
-// SetupVaultwardenSecret creates a user account and a secret item in Vaultwarden
-func SetupVaultwardenSecret(ctx context.Context, t *testing.T, vaultwarden *VaultwardenContainer, itemName string, noteContent string, fields map[string]string) (string, string) {
-	t.Helper()
-
-	// For vaultwarden, we need to:
-	// 1. Create a user account (signup)
-	// 2. Login to get access token
-	// 3. Create a cipher (secret item)
-	// 4. Return the item ID and access token
-
-	// Create HTTP client
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	// Step 1: Try to login first - if user exists, skip creation
-	testLoginURL := fmt.Sprintf("%s/identity/connect/token", vaultwarden.URL)
-	testDeviceIdentifier := "sstart-test"
-	testDeviceName := "sstart-test"
-	testDeviceType := "7" // 7 = CLI
-	testLoginData := fmt.Sprintf("grant_type=password&username=%s&password=%s&scope=api offline_access&client_id=web&device_identifier=%s&device_name=%s&device_type=%s",
-		vaultwarden.Email, vaultwarden.Password, testDeviceIdentifier, testDeviceName, testDeviceType)
-
-	testLoginReq, _ := http.NewRequestWithContext(ctx, "POST", testLoginURL, strings.NewReader(testLoginData))
-	testLoginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	testLoginResp, _ := client.Do(testLoginReq)
-	userExists := testLoginResp != nil && testLoginResp.StatusCode == http.StatusOK
-	if testLoginResp != nil {
-		testLoginResp.Body.Close()
-	}
-
-	// If user doesn't exist, create via public signup API
-	if !userExists {
-		// Hash password using PBKDF2 (Bitwarden uses PBKDF2 with 100000 iterations)
-		salt := []byte("sstart-test-salt") // Simple salt for testing
-		iterations := 100000
-		passwordHash := pbkdf2.Key([]byte(vaultwarden.Password), salt, iterations, 32, sha256.New)
-		masterPasswordHash := base64.StdEncoding.EncodeToString(passwordHash)
-
-		signupURL := fmt.Sprintf("%s/api/accounts/register", vaultwarden.URL)
-		signupData := map[string]interface{}{
-			"email":                vaultwarden.Email,
-			"masterPasswordHash":   masterPasswordHash,
-			"masterPasswordHint":   "",
-			"name":                 "Test User",
-			"keys":                 map[string]interface{}{},
-			"kdf":                  0, // PBKDF2
-			"kdfIterations":        iterations,
-			"referenceData":       map[string]interface{}{},
-		}
-		signupJSON, _ := json.Marshal(signupData)
-		signupReq, _ := http.NewRequestWithContext(ctx, "POST", signupURL, strings.NewReader(string(signupJSON)))
-		signupReq.Header.Set("Content-Type", "application/json")
-		
-		signupResp, _ := client.Do(signupReq)
-		if signupResp != nil {
-			signupResp.Body.Close()
-			// Wait a bit for user to be fully created
-			time.Sleep(1 * time.Second)
-		}
-	}
-
-	// Step 2: Login to get access token
-	loginURL := fmt.Sprintf("%s/identity/connect/token", vaultwarden.URL)
-	deviceIdentifier := "sstart-test"
-	deviceName := "sstart-test"
-	deviceType := "7" // 7 = CLI
-	loginData := fmt.Sprintf("grant_type=password&username=%s&password=%s&scope=api offline_access&client_id=web&device_identifier=%s&device_name=%s&device_type=%s",
-		vaultwarden.Email, vaultwarden.Password, deviceIdentifier, deviceName, deviceType)
-
-	loginReq, err := http.NewRequestWithContext(ctx, "POST", loginURL, strings.NewReader(loginData))
-	if err != nil {
-		t.Fatalf("Failed to create login request: %v", err)
-	}
-	loginReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	loginResp, err := client.Do(loginReq)
-	if err != nil {
-		t.Fatalf("Failed to make login request: %v", err)
-	}
-	defer loginResp.Body.Close()
-
-	if loginResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(loginResp.Body)
-		t.Fatalf("Login failed with status %d: %s. User may need to be created manually or via admin API.", loginResp.StatusCode, string(body))
-	}
-
-	var loginResult map[string]interface{}
-	if err := json.NewDecoder(loginResp.Body).Decode(&loginResult); err != nil {
-		t.Fatalf("Failed to decode login response: %v", err)
-	}
-
-	accessToken, ok := loginResult["access_token"].(string)
-	if !ok {
-		// Try "token" field
-		accessToken, ok = loginResult["token"].(string)
-		if !ok {
-			t.Fatalf("Login response did not contain access_token")
-		}
-	}
-
-	// accessToken is now set from login above
-
-	// Step 3: Create cipher (secret item)
-	cipherURL := fmt.Sprintf("%s/api/ciphers", vaultwarden.URL)
-	
-	// Build fields array
-	fieldsArray := make([]map[string]interface{}, 0)
-	for name, value := range fields {
-		fieldsArray = append(fieldsArray, map[string]interface{}{
-			"name":  name,
-			"value": value,
-			"type":  0, // Text field
-		})
-	}
-
-	cipherData := map[string]interface{}{
-		"type":  1, // Login type
-		"name":  itemName,
-		"notes": noteContent,
-		"fields": fieldsArray,
-	}
-
-	cipherJSON, err := json.Marshal(cipherData)
-	if err != nil {
-		t.Fatalf("Failed to marshal cipher data: %v", err)
-	}
-
-	cipherReq, err := http.NewRequestWithContext(ctx, "POST", cipherURL, strings.NewReader(string(cipherJSON)))
-	if err != nil {
-		t.Fatalf("Failed to create cipher request: %v", err)
-	}
-	cipherReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	cipherReq.Header.Set("Content-Type", "application/json")
-
-	cipherResp, err := client.Do(cipherReq)
-	if err != nil {
-		t.Fatalf("Failed to make cipher request: %v", err)
-	}
-	defer cipherResp.Body.Close()
-
-	if cipherResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(cipherResp.Body)
-		t.Fatalf("Create cipher failed with status %d: %s", cipherResp.StatusCode, string(body))
-	}
-
-	var cipherResult map[string]interface{}
-	if err := json.NewDecoder(cipherResp.Body).Decode(&cipherResult); err != nil {
-		t.Fatalf("Failed to decode cipher response: %v", err)
-	}
-
-	itemID, ok := cipherResult["Id"].(string)
-	if !ok {
-		itemID, ok = cipherResult["id"].(string)
-		if !ok {
-			t.Fatalf("Cipher response did not contain item ID")
-		}
-	}
-
-	return itemID, accessToken
-}
