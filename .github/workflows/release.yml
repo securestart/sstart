@@ -37,8 +37,8 @@ jobs:
 
       - name: Install Bitwarden CLI
         run: |
-          BW_VERSION=$(curl -s https://api.github.com/repos/bitwarden/cli/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-          curl -L "https://github.com/bitwarden/cli/releases/download/${BW_VERSION}/bw-linux-${BW_VERSION}.zip" -o bw.zip
+          BW_DOWNLOAD_URL=$(curl -s https://api.github.com/repos/bitwarden/cli/releases/latest | grep '"browser_download_url".*linux.*zip' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          curl -L "${BW_DOWNLOAD_URL}" -o bw.zip
           unzip -q bw.zip
           chmod +x bw
           sudo mv bw /usr/local/bin/
