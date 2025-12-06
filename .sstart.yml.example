@@ -33,3 +33,9 @@ providers:
     id: dotenv-shared
     path: ${HOME}/.config/myapp/.env
 
+  # 1Password example - fetch a whole section
+  # Requires OP_SERVICE_ACCOUNT_TOKEN environment variable
+  - kind: 1password
+    id: onepassword-prod
+    ref: op://Production/MyApp/Database
+

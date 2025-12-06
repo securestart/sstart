@@ -5,6 +5,7 @@ import (
 	_ "github.com/dirathea/sstart/internal/provider/bitwarden"
 	_ "github.com/dirathea/sstart/internal/provider/dotenv"
 	_ "github.com/dirathea/sstart/internal/provider/gcsm"
+	_ "github.com/dirathea/sstart/internal/provider/onepassword"
 	_ "github.com/dirathea/sstart/internal/provider/vault"
 	"github.com/spf13/cobra"
 )

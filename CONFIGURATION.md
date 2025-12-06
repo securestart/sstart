@@ -23,6 +23,7 @@ providers:
 
 | Provider | Status |
 |----------|--------|
+| `1password` | Stable |
 | `aws_secretsmanager` | Stable |
 | `azure_keyvault` | Stable |
 | `bitwarden` | Stable |
@@ -32,6 +33,125 @@ providers:
 | `vault` | Stable |
 
 ## Provider Configuration
+
+### 1Password (`1password`)
+
+Retrieves secrets from 1Password using the 1Password Connect SDK. Supports fetching individual fields, whole sections, or entire items from 1Password vaults.
+
+**Dependencies:**
+- No CLI required. Uses the 1Password Go SDK directly.
+
+**Configuration:**
+- `ref` (required): The 1Password secret reference in the format `op://<vault>/<item>/[section/]<field>`. sstart supports custom reference formats that allow fetching different scopes of secrets:
+  - `op://VaultName/ItemName/fieldName` - Fetch a specific top-level field (not in any section)
+  - `op://VaultName/ItemName/sectionName/fieldName` - Fetch a specific field from a section
+  - `op://VaultName/ItemName/sectionName` - **Fetch all fields from a section** (custom sstart feature)
+  - `op://VaultName/ItemName` - **Fetch all fields from an entire item** (custom sstart feature)
+- `use_section_prefix` (optional): When `true`, fields from sections will have keys prefixed with the section name (e.g., `SectionName_FieldName`). When `false` or not specified, fields use just the field name. Defaults to `false`.
+
+**Reference Format Support:**
+sstart extends the standard 1Password reference format to support fetching multiple secrets at once:
+- **Single field references** (`op://vault/item/field` or `op://vault/item/section/field`): Fetch one specific field value
+- **Whole section references** (`op://vault/item/section`): Fetch all fields from a specific section in an item. All fields from that section will be loaded as environment variables.
+- **Whole item references** (`op://vault/item`): Fetch all fields from an entire item, including both top-level fields and fields from all sections. This is useful when you want to load all secrets from an item at once.
+
+**Authentication:**
+1Password authentication must be provided via environment variable:
+- `OP_SERVICE_ACCOUNT_TOKEN` (required): Service account token for 1Password Connect API authentication
+
+**Example - Fetch a specific field:**
+```yaml
+providers:
+  - kind: 1password
+    id: onepassword-prod
+    ref: op://Production/MyApp/API_KEY
+```
+
+**Example - Fetch a whole section:**
+```yaml
+providers:
+  - kind: 1password
+    id: onepassword-db
+    ref: op://Production/MyApp/Database
+    keys:
+      HOST: DB_HOST
+      PORT: DB_PORT
+      USERNAME: DB_USER
+      PASSWORD: DB_PASSWORD
+```
+
+This example fetches all fields from the "Database" section. When using `keys`, only the specified fields will be mapped. If `keys` is omitted, all fields from the section will be loaded.
+
+**Example - Fetch whole item with section prefixes:**
+```yaml
+providers:
+  - kind: 1password
+    id: onepassword-app
+    ref: op://Production/MyApp
+    use_section_prefix: true
+    keys:
+      API_KEY: ==
+      Database_HOST: ==
+      Database_PORT: ==
+      Redis_HOST: ==
+```
+
+This example fetches all fields from the entire item. With `use_section_prefix: true`, fields from sections are prefixed (e.g., `Database_HOST`), while top-level fields remain unprefixed (e.g., `API_KEY`).
+
+**Example - Fetch whole item without section prefixes:**
+```yaml
+providers:
+  - kind: 1password
+    id: onepassword-app
+    ref: op://Production/MyApp
+    use_section_prefix: false
+```
+
+This example fetches all fields from the entire item without section prefixes. Field names will be just the field names (e.g., `HOST`, `PORT`). Top-level fields take precedence over section fields with the same name (warnings are logged). If the same field name exists in multiple sections, an error will be raised to prevent collisions.
+
+**Section Prefix Behavior:**
+- **Default (no prefix)**: When `use_section_prefix` is not specified or set to `false`, fields use just their field names (e.g., `HOST`, `PORT`). This works well when field names are unique across sections.
+- **With prefix**: When `use_section_prefix: true`, fields from sections are prefixed with the section name (e.g., `Database_HOST`, `Database_PORT`). This prevents collisions when the same field name exists in multiple sections.
+
+**Collision Handling and Priority:**
+When fetching secrets without section prefixes, sstart handles collisions with a clear priority system:
+
+1. **Top-level fields take precedence**: If a field name exists both as a top-level field and in a section, the top-level field value will be used. A warning will be logged suggesting how to access the section field instead.
+
+2. **Ambiguous references**: When using a reference like `op://vault/item/DB` where both a top-level field "DB" and a section "DB" exist, sstart will:
+   - Use the top-level field (priority)
+   - Log a warning about the ambiguous reference
+   - Suggest renaming either the top-level field or the section in 1Password to avoid ambiguity, or use `use_section_prefix: true` when fetching the whole item to access both
+
+3. **Section-to-section collisions**: If the same field name exists in multiple sections (e.g., `HOST` in both "Database" and "Redis" sections), sstart will return an error. Use `use_section_prefix: true` to load both fields with distinct names.
+
+**Examples of collision handling:**
+
+- **Top-level field vs section field**: If item has top-level field `DB` and section `DB` with field `HOST`:
+  - `op://vault/item/DB` → Uses top-level field `DB`, warns about section
+  - `op://vault/item` → Uses top-level field `DB`, section field `HOST` is loaded (no collision)
+  - If section `DB` also had a field named `DB`, the top-level field takes precedence, and a warning is logged
+
+- **Multiple sections with same field name**: If item has `HOST` in both "Database" and "Redis" sections:
+  - `op://vault/item` (without prefix) → Error: collision detected
+  - `op://vault/item` with `use_section_prefix: true` → Loads both as `Database_HOST` and `Redis_HOST`
+
+**How it works:**
+The provider uses the 1Password Connect SDK to authenticate with 1Password Connect (or 1Password Business/Enterprise) using a service account token. It resolves vault and item names to IDs, then retrieves the specified secrets. 
+
+sstart implements custom support for 1Password reference formats beyond single-field references:
+- **Section-level fetching** (`op://vault/item/section`): When a reference points to a section (without a field name), sstart fetches all fields within that section and makes them available as environment variables.
+- **Item-level fetching** (`op://vault/item`): When a reference points to just a vault and item (without section or field), sstart fetches all fields from the entire item, including top-level fields and fields from all sections.
+
+This custom implementation allows you to efficiently load multiple secrets in a single provider configuration, rather than requiring separate provider entries for each field.
+
+**1Password Connect Setup:**
+To use this provider, you need:
+1. 1Password Connect server running (or access to 1Password Business/Enterprise)
+2. A service account token created in your 1Password account
+3. The service account must have access to the vaults and items you want to retrieve
+
+For more information on setting up 1Password Connect, see the [1Password Connect documentation](https://developer.1password.com/docs/connect).
 
 ### AWS Secrets Manager (`aws_secretsmanager`)
 
