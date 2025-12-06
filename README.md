@@ -1,11 +1,11 @@
 # 🤫 sstart: Secure Start for Cloud-Native Secrets
-sstart is a minimalist, zero-persistence CLI tool that securely retrieves application secrets from multiple backend sources (Vault, AWS Secrets Manager, Azure Key Vault, GCP Secret Manager) and injects them as environment variables into any wrapped process.
+sstart is a minimalist, zero-persistence CLI tool that securely retrieves application secrets from multiple backend sources (1Password, Vault, AWS Secrets Manager, Azure Key Vault, GCP Secret Manager) and injects them as environment variables into any wrapped process.
 
 It is the spiritual successor to the [Teller](https://github.com/tellerops/teller), modernized and rebuilt in Go for fast execution, reliability, and cross-platform simplicity.
 
 ## 🎯 Why sstart?
 
-Say goodbye to `.env` files. With sstart, we eliminate the need for static `.env` files that store secrets in your project directory. Instead, secrets are pulled at runtime from secure backends like AWS Secrets Manager, Azure Key Vault, HashiCorp Vault, or GCP Secret Manager.
+Say goodbye to `.env` files. With sstart, we eliminate the need for static `.env` files that store secrets in your project directory. Instead, secrets are pulled at runtime from secure backends like 1Password, AWS Secrets Manager, Azure Key Vault, HashiCorp Vault, or GCP Secret Manager.
 
 This approach provides multiple security benefits:
 
@@ -17,7 +17,7 @@ You define all your required secrets from all your sources in a single, declarat
 
 ## Features
 
-- 🔐 **Multiple Secret Providers**: Support for AWS Secrets Manager, Azure Key Vault, Bitwarden, HashiCorp Vault, GCP Secret Manager, dotenv files, and more
+- 🔐 **Multiple Secret Providers**: Support for 1Password, AWS Secrets Manager, Azure Key Vault, Bitwarden, HashiCorp Vault, GCP Secret Manager, dotenv files, and more
 - 🔄 **Combine Secrets**: Merge secrets from multiple providers
 - 🚀 **Subprocess Execution**: Automatically inject secrets into subprocesses
 - 🔒 **Secure by Default**: Secrets never appear in shell history or logs
