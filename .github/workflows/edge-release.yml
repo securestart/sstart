@@ -101,7 +101,7 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: build --clean --id=${{ matrix.build_id }}
+          args: build --clean --snapshot --id=${{ matrix.build_id }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
