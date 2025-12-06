@@ -52,21 +52,7 @@ func TestE2E_OnePassword_SectionField(t *testing.T) {
 		},
 	}
 
-	t.Logf("=== Creating 1Password Item ===")
-	t.Logf("Vault: %s", vaultName)
-	t.Logf("Item Title: %s", itemTitle)
-	t.Logf("Sections to create:")
-	for sectionName, sectionFields := range sections {
-		t.Logf("  Section: %s", sectionName)
-		for fieldName, fieldValue := range sectionFields {
-			t.Logf("    - %s: %s", fieldName, fieldValue)
-		}
-	}
-
 	itemID := SetupOnePasswordItem(ctx, t, client, vaultID, itemTitle, nil, sections)
-	t.Logf("Created item with ID: %s", itemID)
-
-	// Cleanup after test
 	defer CleanupOnePasswordItem(ctx, t, client, vaultID, itemID)
 
 	// Create temporary config file
@@ -80,9 +66,6 @@ providers:
     id: onepassword-test
     ref: %s
 `, onePasswordRef)
-
-	t.Logf("\n=== sstart Configuration ===")
-	t.Logf("1Password Reference: %s (fetching all secrets)", onePasswordRef)
 
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
@@ -98,19 +81,12 @@ providers:
 	collector := secrets.NewCollector(cfg)
 
 	// Collect secrets from 1Password provider
-	t.Logf("\n=== Fetching secrets with sstart ===")
 	collectedSecrets, err := collector.Collect(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to collect secrets: %v", err)
 	}
 
-	t.Logf("Secrets fetched by sstart:")
-	for key, value := range collectedSecrets {
-		t.Logf("  - %s: %s", key, value)
-	}
-
 	// Verify we got the expected secret
-	// When fetching a specific field from a section, the key should be just the field name (no section prefix)
 	expectedValue := "db.example.com"
 	actualValue, exists := collectedSecrets["HOST"]
 	if !exists {
@@ -123,8 +99,6 @@ providers:
 	if len(collectedSecrets) != 1 {
 		t.Errorf("Expected 1 secret, got %d. Secrets: %v", len(collectedSecrets), collectedSecrets)
 	}
-
-	t.Logf("\n✓ Successfully collected secret from 1Password provider (section field)")
 }
 
 // TestE2E_OnePassword_TopLevelField tests fetching a top-level field (not in any section)
@@ -147,28 +121,14 @@ func TestE2E_OnePassword_TopLevelField(t *testing.T) {
 		"API_KEY":    "test-api-key-top-level",
 		"JWT_SECRET": "test-jwt-secret-top-level",
 	}
-	// No sections - these are top-level fields
-	sections := map[string]map[string]string{}
 
-	t.Logf("=== Creating 1Password Item ===")
-	t.Logf("Vault: %s", vaultName)
-	t.Logf("Item Title: %s", itemTitle)
-	t.Logf("Top-level fields to create (not in any section):")
-	for fieldName, fieldValue := range fields {
-		t.Logf("  - %s: %s", fieldName, fieldValue)
-	}
-
-	itemID := SetupOnePasswordItem(ctx, t, client, vaultID, itemTitle, fields, sections)
-	t.Logf("Created item with ID: %s", itemID)
-
-	// Cleanup after test
+	itemID := SetupOnePasswordItem(ctx, t, client, vaultID, itemTitle, fields, nil)
 	defer CleanupOnePasswordItem(ctx, t, client, vaultID, itemID)
 
 	// Create temporary config file
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, ".sstart.yml")
 
-	// Fetch a specific top-level field (not in a section)
 	onePasswordRef := fmt.Sprintf("op://%s/%s/API_KEY", vaultName, itemTitle)
 	configYAML := fmt.Sprintf(`
 providers:
@@ -176,9 +136,6 @@ providers:
     id: onepassword-test
     ref: %s
 `, onePasswordRef)
-
-	t.Logf("\n=== sstart Configuration ===")
-	t.Logf("1Password Reference: %s (fetching top-level field, not in any section)", onePasswordRef)
 
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
@@ -194,19 +151,12 @@ providers:
 	collector := secrets.NewCollector(cfg)
 
 	// Collect secrets from 1Password provider
-	t.Logf("\n=== Fetching secrets with sstart ===")
 	collectedSecrets, err := collector.Collect(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to collect secrets: %v", err)
 	}
 
-	t.Logf("Secrets fetched by sstart:")
-	for key, value := range collectedSecrets {
-		t.Logf("  - %s: %s", key, value)
-	}
-
 	// Verify we got the expected secret
-	// When fetching a top-level field (not in section), the key should be just the field name
 	expectedValue := "test-api-key-top-level"
 	actualValue, exists := collectedSecrets["API_KEY"]
 	if !exists {
@@ -219,8 +169,6 @@ providers:
 	if len(collectedSecrets) != 1 {
 		t.Errorf("Expected 1 secret, got %d. Secrets: %v", len(collectedSecrets), collectedSecrets)
 	}
-
-	t.Logf("\n✓ Successfully collected secret from 1Password provider (top-level field, not in any section)")
 }
 
 // TestE2E_OnePassword_WholeSection tests fetching a whole section from 1Password
@@ -248,21 +196,7 @@ func TestE2E_OnePassword_WholeSection(t *testing.T) {
 		},
 	}
 
-	t.Logf("=== Creating 1Password Item ===")
-	t.Logf("Vault: %s", vaultName)
-	t.Logf("Item Title: %s", itemTitle)
-	t.Logf("Sections to create:")
-	for sectionName, sectionFields := range sections {
-		t.Logf("  Section: %s", sectionName)
-		for fieldName, fieldValue := range sectionFields {
-			t.Logf("    - %s: %s", fieldName, fieldValue)
-		}
-	}
-
 	itemID := SetupOnePasswordItem(ctx, t, client, vaultID, itemTitle, nil, sections)
-	t.Logf("Created item with ID: %s", itemID)
-
-	// Cleanup after test
 	defer CleanupOnePasswordItem(ctx, t, client, vaultID, itemID)
 
 	// Create temporary config file
@@ -276,9 +210,6 @@ providers:
     id: onepassword-test
     ref: %s
 `, onePasswordRef)
-
-	t.Logf("\n=== sstart Configuration ===")
-	t.Logf("1Password Reference: %s (fetching whole section, all secrets)", onePasswordRef)
 
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
@@ -294,15 +225,9 @@ providers:
 	collector := secrets.NewCollector(cfg)
 
 	// Collect secrets from 1Password provider
-	t.Logf("\n=== Fetching secrets with sstart ===")
 	collectedSecrets, err := collector.Collect(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to collect secrets: %v", err)
-	}
-
-	t.Logf("Secrets fetched by sstart:")
-	for key, value := range collectedSecrets {
-		t.Logf("  - %s: %s", key, value)
 	}
 
 	// Verify we got all expected secrets from the section
@@ -325,12 +250,9 @@ providers:
 	}
 
 	// Verify that we have all expected secrets
-	expectedCount := len(expectedSecrets)
-	if len(collectedSecrets) != expectedCount {
-		t.Errorf("Expected %d secrets, got %d. Secrets: %v", expectedCount, len(collectedSecrets), collectedSecrets)
+	if len(collectedSecrets) != len(expectedSecrets) {
+		t.Errorf("Expected %d secrets, got %d. Secrets: %v", len(expectedSecrets), len(collectedSecrets), collectedSecrets)
 	}
-
-	t.Logf("\n✓ Successfully collected %d secrets from 1Password provider (whole section)", len(collectedSecrets))
 }
 
 // TestE2E_OnePassword_WholeItem_OnlyTopLevelFields tests fetching a whole item that has only top-level fields (no sections)
@@ -354,21 +276,8 @@ func TestE2E_OnePassword_WholeItem_OnlyTopLevelFields(t *testing.T) {
 		"JWT_SECRET": "test-jwt-secret-only",
 		"DB_URL":     "postgresql://localhost:5432/mydb",
 	}
-	// No sections
-	sections := map[string]map[string]string{}
 
-	t.Logf("=== Creating 1Password Item ===")
-	t.Logf("Vault: %s", vaultName)
-	t.Logf("Item Title: %s", itemTitle)
-	t.Logf("Top-level fields to create (no sections):")
-	for fieldName, fieldValue := range fields {
-		t.Logf("  - %s: %s", fieldName, fieldValue)
-	}
-
-	itemID := SetupOnePasswordItem(ctx, t, client, vaultID, itemTitle, fields, sections)
-	t.Logf("Created item with ID: %s", itemID)
-
-	// Cleanup after test
+	itemID := SetupOnePasswordItem(ctx, t, client, vaultID, itemTitle, fields, nil)
 	defer CleanupOnePasswordItem(ctx, t, client, vaultID, itemID)
 
 	// Create temporary config file
@@ -382,9 +291,6 @@ providers:
     id: onepassword-test
     ref: %s
 `, onePasswordRef)
-
-	t.Logf("\n=== sstart Configuration ===")
-	t.Logf("1Password Reference: %s (fetching whole item with only top-level fields)", onePasswordRef)
 
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
@@ -400,19 +306,12 @@ providers:
 	collector := secrets.NewCollector(cfg)
 
 	// Collect secrets from 1Password provider
-	t.Logf("\n=== Fetching secrets with sstart ===")
 	collectedSecrets, err := collector.Collect(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to collect secrets: %v", err)
 	}
 
-	t.Logf("Secrets fetched by sstart:")
-	for key, value := range collectedSecrets {
-		t.Logf("  - %s: %s", key, value)
-	}
-
 	// Verify we got all expected secrets from the item
-	// All fields should be top-level (no section prefix)
 	expectedSecrets := map[string]string{
 		"API_KEY":    "test-api-key-only",
 		"JWT_SECRET": "test-jwt-secret-only",
@@ -431,23 +330,18 @@ providers:
 	}
 
 	// Verify that we have all expected secrets
-	expectedCount := len(expectedSecrets)
-	if len(collectedSecrets) != expectedCount {
-		t.Errorf("Expected %d secrets, got %d. Secrets: %v", expectedCount, len(collectedSecrets), collectedSecrets)
+	if len(collectedSecrets) != len(expectedSecrets) {
+		t.Errorf("Expected %d secrets, got %d. Secrets: %v", len(expectedSecrets), len(collectedSecrets), collectedSecrets)
 	}
 
 	// Verify that no secrets have section prefixes (since there are no sections)
 	for key := range collectedSecrets {
 		if strings.Contains(key, "_") {
-			// Check if this underscore is from a section prefix
-			// If the key contains underscore but doesn't match any expected key, it might be a section prefix
 			if _, exists := expectedSecrets[key]; !exists {
 				t.Errorf("Unexpected secret key '%s' found - might have incorrect section prefix", key)
 			}
 		}
 	}
-
-	t.Logf("\n✓ Successfully collected %d secrets from 1Password provider (whole item with only top-level fields)", len(collectedSecrets))
 }
 
 // TestE2E_OnePassword_WholeItem tests fetching a whole item from 1Password
@@ -482,25 +376,7 @@ func TestE2E_OnePassword_WholeItem(t *testing.T) {
 		},
 	}
 
-	t.Logf("=== Creating 1Password Item ===")
-	t.Logf("Vault: %s", vaultName)
-	t.Logf("Item Title: %s", itemTitle)
-	t.Logf("Top-level fields to create:")
-	for fieldName, fieldValue := range fields {
-		t.Logf("  - %s: %s", fieldName, fieldValue)
-	}
-	t.Logf("Sections to create:")
-	for sectionName, sectionFields := range sections {
-		t.Logf("  Section: %s", sectionName)
-		for fieldName, fieldValue := range sectionFields {
-			t.Logf("    - %s: %s", fieldName, fieldValue)
-		}
-	}
-
 	itemID := SetupOnePasswordItem(ctx, t, client, vaultID, itemTitle, fields, sections)
-	t.Logf("Created item with ID: %s", itemID)
-
-	// Cleanup after test
 	defer CleanupOnePasswordItem(ctx, t, client, vaultID, itemID)
 
 	// Create temporary config file
@@ -516,9 +392,6 @@ providers:
     use_section_prefix: true
 `, onePasswordRef)
 
-	t.Logf("\n=== sstart Configuration ===")
-	t.Logf("1Password Reference: %s (fetching whole item, all secrets, use_section_prefix: true)", onePasswordRef)
-
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
@@ -533,23 +406,15 @@ providers:
 	collector := secrets.NewCollector(cfg)
 
 	// Collect secrets from 1Password provider
-	t.Logf("\n=== Fetching secrets with sstart ===")
 	collectedSecrets, err := collector.Collect(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to collect secrets: %v", err)
 	}
 
-	t.Logf("Secrets fetched by sstart:")
-	for key, value := range collectedSecrets {
-		t.Logf("  - %s: %s", key, value)
-	}
-
 	// Verify we got all expected secrets from the item
-	// Top-level fields
 	expectedSecrets := map[string]string{
-		"API_KEY":    "test-api-key-12345",
-		"JWT_SECRET": "test-jwt-secret-67890",
-		// Section fields (with section prefix)
+		"API_KEY":           "test-api-key-12345",
+		"JWT_SECRET":        "test-jwt-secret-67890",
 		"Database_HOST":     "db.example.com",
 		"Database_PORT":     "5432",
 		"Database_USERNAME": "dbuser",
@@ -569,12 +434,9 @@ providers:
 	}
 
 	// Verify that we have all expected secrets
-	expectedCount := len(expectedSecrets)
-	if len(collectedSecrets) != expectedCount {
-		t.Errorf("Expected %d secrets, got %d. Secrets: %v", expectedCount, len(collectedSecrets), collectedSecrets)
+	if len(collectedSecrets) != len(expectedSecrets) {
+		t.Errorf("Expected %d secrets, got %d. Secrets: %v", len(expectedSecrets), len(collectedSecrets), collectedSecrets)
 	}
-
-	t.Logf("\n✓ Successfully collected %d secrets from 1Password provider (whole item)", len(collectedSecrets))
 }
 
 // TestE2E_OnePassword_WholeItem_NoSectionPrefix tests fetching a whole item without section prefixes
@@ -609,25 +471,7 @@ func TestE2E_OnePassword_WholeItem_NoSectionPrefix(t *testing.T) {
 		},
 	}
 
-	t.Logf("=== Creating 1Password Item ===")
-	t.Logf("Vault: %s", vaultName)
-	t.Logf("Item Title: %s", itemTitle)
-	t.Logf("Top-level fields to create:")
-	for fieldName, fieldValue := range fields {
-		t.Logf("  - %s: %s", fieldName, fieldValue)
-	}
-	t.Logf("Sections to create:")
-	for sectionName, sectionFields := range sections {
-		t.Logf("  Section: %s", sectionName)
-		for fieldName, fieldValue := range sectionFields {
-			t.Logf("    - %s: %s", fieldName, fieldValue)
-		}
-	}
-
 	itemID := SetupOnePasswordItem(ctx, t, client, vaultID, itemTitle, fields, sections)
-	t.Logf("Created item with ID: %s", itemID)
-
-	// Cleanup after test
 	defer CleanupOnePasswordItem(ctx, t, client, vaultID, itemID)
 
 	// Create temporary config file
@@ -643,9 +487,6 @@ providers:
     use_section_prefix: false
 `, onePasswordRef)
 
-	t.Logf("\n=== sstart Configuration ===")
-	t.Logf("1Password Reference: %s (fetching whole item, use_section_prefix: false)", onePasswordRef)
-
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
@@ -660,7 +501,6 @@ providers:
 	collector := secrets.NewCollector(cfg)
 
 	// Collect secrets from 1Password provider
-	t.Logf("\n=== Fetching secrets with sstart ===")
 	collectedSecrets, err := collector.Collect(ctx, nil)
 
 	// This should fail due to collisions (HOST and PORT exist in both Database and Redis sections)
@@ -672,8 +512,6 @@ providers:
 	if !strings.Contains(err.Error(), "collision") {
 		t.Errorf("Expected error message to mention 'collision', got: %v", err)
 	}
-
-	t.Logf("\n✓ Correctly failed with collision error: %v", err)
 }
 
 // TestE2E_OnePassword_WholeSection_NoSectionPrefix tests fetching a whole section without section prefix
@@ -701,21 +539,7 @@ func TestE2E_OnePassword_WholeSection_NoSectionPrefix(t *testing.T) {
 		},
 	}
 
-	t.Logf("=== Creating 1Password Item ===")
-	t.Logf("Vault: %s", vaultName)
-	t.Logf("Item Title: %s", itemTitle)
-	t.Logf("Sections to create:")
-	for sectionName, sectionFields := range sections {
-		t.Logf("  Section: %s", sectionName)
-		for fieldName, fieldValue := range sectionFields {
-			t.Logf("    - %s: %s", fieldName, fieldValue)
-		}
-	}
-
 	itemID := SetupOnePasswordItem(ctx, t, client, vaultID, itemTitle, nil, sections)
-	t.Logf("Created item with ID: %s", itemID)
-
-	// Cleanup after test
 	defer CleanupOnePasswordItem(ctx, t, client, vaultID, itemID)
 
 	// Create temporary config file
@@ -731,9 +555,6 @@ providers:
     use_section_prefix: false
 `, onePasswordRef)
 
-	t.Logf("\n=== sstart Configuration ===")
-	t.Logf("1Password Reference: %s (fetching whole section, use_section_prefix: false)", onePasswordRef)
-
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
@@ -748,19 +569,12 @@ providers:
 	collector := secrets.NewCollector(cfg)
 
 	// Collect secrets from 1Password provider
-	t.Logf("\n=== Fetching secrets with sstart ===")
 	collectedSecrets, err := collector.Collect(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to collect secrets: %v", err)
 	}
 
-	t.Logf("Secrets fetched by sstart:")
-	for key, value := range collectedSecrets {
-		t.Logf("  - %s: %s", key, value)
-	}
-
 	// Verify we got all expected secrets from the section
-	// Without section prefix, keys should be just the field names
 	expectedSecrets := map[string]string{
 		"HOST":     "db.example.com",
 		"PORT":     "5432",
@@ -780,9 +594,8 @@ providers:
 	}
 
 	// Verify that we have all expected secrets
-	expectedCount := len(expectedSecrets)
-	if len(collectedSecrets) != expectedCount {
-		t.Errorf("Expected %d secrets, got %d. Secrets: %v", expectedCount, len(collectedSecrets), collectedSecrets)
+	if len(collectedSecrets) != len(expectedSecrets) {
+		t.Errorf("Expected %d secrets, got %d. Secrets: %v", len(expectedSecrets), len(collectedSecrets), collectedSecrets)
 	}
 
 	// Verify that no secrets have section prefixes
@@ -791,8 +604,6 @@ providers:
 			t.Errorf("Unexpected section prefix found in key '%s' (use_section_prefix is false)", key)
 		}
 	}
-
-	t.Logf("\n✓ Successfully collected %d secrets from 1Password provider (whole section, no section prefix)", len(collectedSecrets))
 }
 
 // TestE2E_OnePassword_SectionField_NoSectionPrefix tests fetching a field from a section without section prefix
@@ -819,21 +630,7 @@ func TestE2E_OnePassword_SectionField_NoSectionPrefix(t *testing.T) {
 		},
 	}
 
-	t.Logf("=== Creating 1Password Item ===")
-	t.Logf("Vault: %s", vaultName)
-	t.Logf("Item Title: %s", itemTitle)
-	t.Logf("Sections to create:")
-	for sectionName, sectionFields := range sections {
-		t.Logf("  Section: %s", sectionName)
-		for fieldName, fieldValue := range sectionFields {
-			t.Logf("    - %s: %s", fieldName, fieldValue)
-		}
-	}
-
 	itemID := SetupOnePasswordItem(ctx, t, client, vaultID, itemTitle, nil, sections)
-	t.Logf("Created item with ID: %s", itemID)
-
-	// Cleanup after test
 	defer CleanupOnePasswordItem(ctx, t, client, vaultID, itemID)
 
 	// Create temporary config file
@@ -849,9 +646,6 @@ providers:
     use_section_prefix: false
 `, onePasswordRef)
 
-	t.Logf("\n=== sstart Configuration ===")
-	t.Logf("1Password Reference: %s (fetching section field, use_section_prefix: false)", onePasswordRef)
-
 	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
@@ -866,19 +660,12 @@ providers:
 	collector := secrets.NewCollector(cfg)
 
 	// Collect secrets from 1Password provider
-	t.Logf("\n=== Fetching secrets with sstart ===")
 	collectedSecrets, err := collector.Collect(ctx, nil)
 	if err != nil {
 		t.Fatalf("Failed to collect secrets: %v", err)
 	}
 
-	t.Logf("Secrets fetched by sstart:")
-	for key, value := range collectedSecrets {
-		t.Logf("  - %s: %s", key, value)
-	}
-
 	// Verify we got the expected secret
-	// When fetching a specific field without section prefix, the key should be just the field name
 	expectedValue := "db.example.com"
 	actualValue, exists := collectedSecrets["HOST"]
 	if !exists {
@@ -896,6 +683,4 @@ providers:
 	if _, exists := collectedSecrets["Database_HOST"]; exists {
 		t.Errorf("Unexpected section prefix found in key 'Database_HOST' (use_section_prefix is false)")
 	}
-
-	t.Logf("\n✓ Successfully collected secret from 1Password provider (section field, no section prefix)")
 }

@@ -72,187 +72,262 @@ func (p *OnePasswordProvider) Fetch(ctx context.Context, mapID string, config ma
 		return nil, fmt.Errorf("failed to parse ref '%s': %w", cfg.Ref, err)
 	}
 
-	// If we have 3 parts (vault/item/part3), we need to determine if part3 is a section or field
-	// Priority: top-level field takes precedence over section with the same name
-	if parsedRef.Section == "" && parsedRef.Field != "" {
-		item, err := p.getItem(ctx, parsedRef.Vault, parsedRef.Item)
-		if err == nil {
-			// First, check if there's a top-level field with this name
-			hasTopLevelField := false
-			for _, field := range item.Fields {
-				if field.SectionID == nil && field.Title == parsedRef.Field {
-					hasTopLevelField = true
-					break
-				}
-			}
-
-			// Check if there's also a section with this name
-			hasSection := false
-			for _, section := range item.Sections {
-				if section.Title == parsedRef.Field {
-					hasSection = true
-					break
-				}
-			}
-
-			// If both exist, prioritize top-level field and warn
-			if hasTopLevelField && hasSection {
-				log.Printf("WARNING: Ambiguous reference '%s': both a top-level field '%s' and a section '%s' exist in item '%s/%s'. Using top-level field. To load the section instead, either: (1) rename the top-level field or section in 1Password to avoid ambiguity, or (2) use 'op://%s/%s' with use_section_prefix: true to load all fields from the item", cfg.Ref, parsedRef.Field, parsedRef.Field, parsedRef.Vault, parsedRef.Item, parsedRef.Vault, parsedRef.Item)
-				// Keep as field reference (top-level field takes precedence)
-			} else if hasSection && !hasTopLevelField {
-				// Only section exists, treat as section reference
-				parsedRef.Section = parsedRef.Field
-				parsedRef.Field = ""
-			}
-			// If only top-level field exists, keep as field reference (default behavior)
-		}
+	// Resolve ambiguous references (field vs section)
+	if err := p.resolveAmbiguousRef(ctx, cfg, parsedRef); err != nil {
+		return nil, err
 	}
-
-	// Section prefix behavior:
-	// - Default: no prefix for all cases (just field names)
-	// - When use_section_prefix: true is explicitly set, section fields get SectionName_FieldName format
-	// - For whole item fetching, collisions (same field name in different sections) will fail
 
 	// Fetch secrets based on the ref type
 	var secretData map[string]interface{}
 
 	if parsedRef.Field != "" {
 		// Fetching a specific field (or field in section)
-		log.Printf("DEBUG: Resolving 1Password secret reference (field): %s", cfg.Ref)
-		// Use the SDK's Resolve method which handles name-to-ID resolution
-		value, err := p.client.Secrets().Resolve(ctx, cfg.Ref)
-		if err != nil {
-			log.Printf("ERROR: Failed to resolve 1Password secret reference '%s': %v", cfg.Ref, err)
-			return nil, fmt.Errorf("failed to resolve 1Password secret '%s': %w", cfg.Ref, err)
-		}
-		log.Printf("DEBUG: Successfully resolved 1Password secret reference: %s", cfg.Ref)
-		// Single field value
-		// Default: no prefix (just field name)
-		// Only use prefix if explicitly enabled via use_section_prefix: true
-		fieldName := parsedRef.Field
-		if parsedRef.Section != "" && cfg.UseSectionPrefix != nil && *cfg.UseSectionPrefix {
-			// Explicitly enabled: use prefix
-			fieldName = fmt.Sprintf("%s_%s", parsedRef.Section, parsedRef.Field)
-		}
-		secretData = map[string]interface{}{
-			fieldName: value,
-		}
+		secretData, err = p.fetchField(ctx, cfg, parsedRef)
 	} else if parsedRef.Section != "" {
 		// Fetching a whole section
-		log.Printf("DEBUG: Fetching whole section from 1Password item: %s/%s/%s", parsedRef.Vault, parsedRef.Item, parsedRef.Section)
-		// We need to get the item and extract all fields from the section
-		item, err := p.getItem(ctx, parsedRef.Vault, parsedRef.Item)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get item '%s/%s': %w", parsedRef.Vault, parsedRef.Item, err)
-		}
-
-		// Find the section by title
-		var sectionID *string
-		for _, section := range item.Sections {
-			if section.Title == parsedRef.Section {
-				sectionID = &section.ID
-				break
-			}
-		}
-		if sectionID == nil {
-			return nil, fmt.Errorf("section '%s' not found in item '%s/%s'", parsedRef.Section, parsedRef.Vault, parsedRef.Item)
-		}
-
-		// Extract all fields from the specified section
-		// Default: no prefix (just field names)
-		// Only use prefix if explicitly enabled via use_section_prefix: true
-		secretData = make(map[string]interface{})
-		for _, field := range item.Fields {
-			if field.SectionID != nil && *field.SectionID == *sectionID {
-				fieldKey := field.Title
-				if cfg.UseSectionPrefix != nil && *cfg.UseSectionPrefix {
-					fieldKey = fmt.Sprintf("%s_%s", parsedRef.Section, field.Title)
-				}
-				secretData[fieldKey] = field.Value
-			}
-		}
-
-		if len(secretData) == 0 {
-			return nil, fmt.Errorf("no fields found in section '%s' of item '%s/%s'", parsedRef.Section, parsedRef.Vault, parsedRef.Item)
-		}
-		log.Printf("DEBUG: Successfully fetched %d fields from section", len(secretData))
+		secretData, err = p.fetchSection(ctx, cfg, parsedRef)
 	} else {
 		// Fetching the whole item
-		log.Printf("DEBUG: Fetching whole item from 1Password: %s/%s", parsedRef.Vault, parsedRef.Item)
-		item, err := p.getItem(ctx, parsedRef.Vault, parsedRef.Item)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get item '%s/%s': %w", parsedRef.Vault, parsedRef.Item, err)
-		}
+		secretData, err = p.fetchWholeItem(ctx, cfg, parsedRef)
+	}
 
-		// Extract all fields from the item
-		// Default: no prefix (just field names)
-		// Only use prefix if explicitly enabled via use_section_prefix: true
-		// When not using prefixes, prioritize top-level fields and warn about collisions
-		secretData = make(map[string]interface{})
-		keyToSection := make(map[string]string) // key -> section name (for collision detection when not using prefixes)
-		processedKeys := make(map[string]bool)   // Track which keys we've already processed
-
-		// First pass: Process top-level fields (they take precedence)
-		for _, field := range item.Fields {
-			if field.SectionID == nil {
-				// Top-level field
-				fieldKey := field.Title
-				processedKeys[fieldKey] = true
-				keyToSection[fieldKey] = "" // Empty string indicates top-level
-				secretData[fieldKey] = field.Value
-			}
-		}
-
-		// Second pass: Process section fields, checking for collisions
-		for _, field := range item.Fields {
-			if field.SectionID != nil {
-				// Field in a section
-				var sectionTitle string
-				for _, section := range item.Sections {
-					if section.ID == *field.SectionID {
-						sectionTitle = section.Title
-						break
-					}
-				}
-
-				fieldKey := field.Title
-				if sectionTitle != "" && cfg.UseSectionPrefix != nil && *cfg.UseSectionPrefix {
-					// Use prefix if explicitly enabled
-					fieldKey = fmt.Sprintf("%s_%s", sectionTitle, field.Title)
-					// With prefix, no collision possible
-					secretData[fieldKey] = field.Value
-				} else {
-					// No prefix - check for collisions
-					if cfg.UseSectionPrefix == nil || (cfg.UseSectionPrefix != nil && !*cfg.UseSectionPrefix) {
-						if processedKeys[fieldKey] {
-							// Collision detected
-							existingSection := keyToSection[fieldKey]
-							if existingSection == "" {
-								// Top-level field already exists - it takes precedence, warn about section field
-								log.Printf("WARNING: Field '%s' exists as both top-level field and in section '%s' in item '%s/%s'. Top-level field will be used. To load the section field instead, either: (1) rename the top-level field or section in 1Password, or (2) use use_section_prefix: true to load both (section field will be '%s_%s')", fieldKey, sectionTitle, parsedRef.Vault, parsedRef.Item, sectionTitle, field.Title)
-								// Skip this section field - top-level field already in secretData
-							} else if existingSection != sectionTitle {
-								// Field exists in multiple sections - this is an error
-								return nil, fmt.Errorf("collision detected: field '%s' exists in both section '%s' and section '%s' in item '%s/%s'. Use use_section_prefix: true to avoid collisions", fieldKey, existingSection, sectionTitle, parsedRef.Vault, parsedRef.Item)
-							}
-						} else {
-							// No collision, add the field
-							processedKeys[fieldKey] = true
-							keyToSection[fieldKey] = sectionTitle
-							secretData[fieldKey] = field.Value
-						}
-					}
-				}
-			}
-		}
-
-		if len(secretData) == 0 {
-			return nil, fmt.Errorf("no fields found in item '%s/%s'", parsedRef.Vault, parsedRef.Item)
-		}
-		log.Printf("DEBUG: Successfully fetched %d fields from item", len(secretData))
+	if err != nil {
+		return nil, err
 	}
 
 	// Map keys according to configuration
+	return mapSecretKeys(secretData, keys), nil
+}
+
+// resolveAmbiguousRef resolves ambiguous references where part3 could be a field or section
+func (p *OnePasswordProvider) resolveAmbiguousRef(ctx context.Context, cfg *OnePasswordConfig, parsedRef *parsedRef) error {
+	// If we have 3 parts (vault/item/part3), we need to determine if part3 is a section or field
+	// Priority: top-level field takes precedence over section with the same name
+	if parsedRef.Section == "" && parsedRef.Field != "" {
+		item, err := p.getItem(ctx, parsedRef.Vault, parsedRef.Item)
+		if err != nil {
+			// If we can't get the item, we'll let the actual fetch handle the error
+			return nil
+		}
+
+		// First, check if there's a top-level field with this name
+		hasTopLevelField := false
+		for _, field := range item.Fields {
+			if field.SectionID == nil && field.Title == parsedRef.Field {
+				hasTopLevelField = true
+				break
+			}
+		}
+
+		// Check if there's also a section with this name
+		hasSection := false
+		for _, section := range item.Sections {
+			if section.Title == parsedRef.Field {
+				hasSection = true
+				break
+			}
+		}
+
+		// If both exist, prioritize top-level field and warn
+		if hasTopLevelField && hasSection {
+			log.Printf("WARNING: Ambiguous reference '%s': both a top-level field '%s' and a section '%s' exist in item '%s/%s'. Using top-level field. To load the section instead, either: (1) rename the top-level field or section in 1Password to avoid ambiguity, or (2) use 'op://%s/%s' with use_section_prefix: true to load all fields from the item", cfg.Ref, parsedRef.Field, parsedRef.Field, parsedRef.Vault, parsedRef.Item, parsedRef.Vault, parsedRef.Item)
+			// Keep as field reference (top-level field takes precedence)
+		} else if hasSection && !hasTopLevelField {
+			// Only section exists, treat as section reference
+			parsedRef.Section = parsedRef.Field
+			parsedRef.Field = ""
+		}
+		// If only top-level field exists, keep as field reference (default behavior)
+	}
+	return nil
+}
+
+// fetchField fetches a specific field from 1Password
+func (p *OnePasswordProvider) fetchField(ctx context.Context, cfg *OnePasswordConfig, parsedRef *parsedRef) (map[string]interface{}, error) {
+	// Use the SDK's Resolve method which handles name-to-ID resolution
+	value, err := p.client.Secrets().Resolve(ctx, cfg.Ref)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve 1Password secret '%s': %w", cfg.Ref, err)
+	}
+
+	// Determine field key
+	// Default: no prefix (just field name)
+	// Only use prefix if explicitly enabled via use_section_prefix: true
+	fieldName := parsedRef.Field
+	if parsedRef.Section != "" && cfg.UseSectionPrefix != nil && *cfg.UseSectionPrefix {
+		// Explicitly enabled: use prefix
+		fieldName = fmt.Sprintf("%s_%s", parsedRef.Section, parsedRef.Field)
+	}
+
+	return map[string]interface{}{
+		fieldName: value,
+	}, nil
+}
+
+// fetchSection fetches all fields from a specific section in 1Password
+func (p *OnePasswordProvider) fetchSection(ctx context.Context, cfg *OnePasswordConfig, parsedRef *parsedRef) (map[string]interface{}, error) {
+	// Get the item
+	item, err := p.getItem(ctx, parsedRef.Vault, parsedRef.Item)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get item '%s/%s': %w", parsedRef.Vault, parsedRef.Item, err)
+	}
+
+	// Find the section by title
+	var sectionID *string
+	for _, section := range item.Sections {
+		if section.Title == parsedRef.Section {
+			sectionID = &section.ID
+			break
+		}
+	}
+	if sectionID == nil {
+		return nil, fmt.Errorf("section '%s' not found in item '%s/%s'", parsedRef.Section, parsedRef.Vault, parsedRef.Item)
+	}
+
+	// Extract all fields from the specified section
+	// Default: no prefix (just field names)
+	// Only use prefix if explicitly enabled via use_section_prefix: true
+	secretData := make(map[string]interface{})
+	for _, field := range item.Fields {
+		if field.SectionID != nil && *field.SectionID == *sectionID {
+			fieldKey := field.Title
+			if cfg.UseSectionPrefix != nil && *cfg.UseSectionPrefix {
+				fieldKey = fmt.Sprintf("%s_%s", parsedRef.Section, field.Title)
+			}
+			secretData[fieldKey] = field.Value
+		}
+	}
+
+	if len(secretData) == 0 {
+		return nil, fmt.Errorf("no fields found in section '%s' of item '%s/%s'", parsedRef.Section, parsedRef.Vault, parsedRef.Item)
+	}
+
+	return secretData, nil
+}
+
+// fetchWholeItem fetches all fields from a 1Password item
+func (p *OnePasswordProvider) fetchWholeItem(ctx context.Context, cfg *OnePasswordConfig, parsedRef *parsedRef) (map[string]interface{}, error) {
+	// Get the item
+	item, err := p.getItem(ctx, parsedRef.Vault, parsedRef.Item)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get item '%s/%s': %w", parsedRef.Vault, parsedRef.Item, err)
+	}
+
+	// Build a map of section IDs to section titles
+	sectionIDToTitle := make(map[string]string)
+	for _, section := range item.Sections {
+		sectionIDToTitle[section.ID] = section.Title
+	}
+
+	// Extract all fields from the item
+	// Default: no prefix (just field names)
+	// Only use prefix if explicitly enabled via use_section_prefix: true
+	// When not using prefixes, prioritize top-level fields and warn about collisions
+	secretData := make(map[string]interface{})
+	keyToSection := make(map[string]string) // key -> section name (for collision detection when not using prefixes)
+	processedKeys := make(map[string]bool)  // Track which keys we've already processed
+
+	// First pass: Process top-level fields (they take precedence)
+	p.processTopLevelFields(item, sectionIDToTitle, secretData, keyToSection, processedKeys)
+
+	// Second pass: Process section fields
+	if err := p.processSectionFields(item, cfg, parsedRef, sectionIDToTitle, secretData, keyToSection, processedKeys); err != nil {
+		return nil, err
+	}
+
+	if len(secretData) == 0 {
+		return nil, fmt.Errorf("no fields found in item '%s/%s'", parsedRef.Vault, parsedRef.Item)
+	}
+
+	return secretData, nil
+}
+
+// processTopLevelFields processes top-level fields from an item
+// A field is considered top-level if:
+// 1. SectionID is nil, OR
+// 2. SectionID points to an empty string, OR
+// 3. SectionID doesn't match any known section
+func (p *OnePasswordProvider) processTopLevelFields(
+	item *onepassword.Item,
+	sectionIDToTitle map[string]string,
+	secretData map[string]interface{},
+	keyToSection map[string]string,
+	processedKeys map[string]bool,
+) {
+	for _, field := range item.Fields {
+		var isTopLevel bool
+		if field.SectionID == nil {
+			isTopLevel = true
+		} else if *field.SectionID == "" {
+			isTopLevel = true
+		} else if sectionIDToTitle[*field.SectionID] == "" {
+			isTopLevel = true
+		}
+
+		if isTopLevel {
+			fieldKey := field.Title
+			processedKeys[fieldKey] = true
+			keyToSection[fieldKey] = "" // Empty string indicates top-level
+			secretData[fieldKey] = field.Value
+		}
+	}
+}
+
+// processSectionFields processes fields from sections, checking for collisions
+func (p *OnePasswordProvider) processSectionFields(
+	item *onepassword.Item,
+	cfg *OnePasswordConfig,
+	parsedRef *parsedRef,
+	sectionIDToTitle map[string]string,
+	secretData map[string]interface{},
+	keyToSection map[string]string,
+	processedKeys map[string]bool,
+) error {
+	for _, field := range item.Fields {
+		if field.SectionID == nil || *field.SectionID == "" {
+			continue // Skip top-level fields (already processed)
+		}
+
+		// Field in a section - look up section title
+		sectionTitle := sectionIDToTitle[*field.SectionID]
+
+		// Skip fields that don't belong to a known section (already processed as top-level)
+		if sectionTitle == "" {
+			continue
+		}
+
+		fieldKey := field.Title
+		if cfg.UseSectionPrefix != nil && *cfg.UseSectionPrefix {
+			// Use prefix if explicitly enabled
+			fieldKey = fmt.Sprintf("%s_%s", sectionTitle, field.Title)
+			// With prefix, no collision possible
+			secretData[fieldKey] = field.Value
+		} else {
+			// No prefix - check for collisions
+			if processedKeys[fieldKey] {
+				// Collision detected
+				existingSection := keyToSection[fieldKey]
+				if existingSection == "" {
+					// Top-level field already exists - it takes precedence, warn about section field
+					log.Printf("WARNING: Field '%s' exists as both top-level field and in section '%s' in item '%s/%s'. Top-level field will be used. To load the section field instead, either: (1) rename the top-level field or section in 1Password, or (2) use use_section_prefix: true to load both (section field will be '%s_%s')", fieldKey, sectionTitle, parsedRef.Vault, parsedRef.Item, sectionTitle, field.Title)
+					// Skip this section field - top-level field already in secretData
+				} else if existingSection != sectionTitle {
+					// Field exists in multiple sections - this is an error
+					return fmt.Errorf("collision detected: field '%s' exists in both section '%s' and section '%s' in item '%s/%s'. Use use_section_prefix: true to avoid collisions", fieldKey, existingSection, sectionTitle, parsedRef.Vault, parsedRef.Item)
+				}
+			} else {
+				// No collision, add the field
+				processedKeys[fieldKey] = true
+				keyToSection[fieldKey] = sectionTitle
+				secretData[fieldKey] = field.Value
+			}
+		}
+	}
+	return nil
+}
+
+// mapSecretKeys maps secret data keys according to the provided key mapping
+func mapSecretKeys(secretData map[string]interface{}, keys map[string]string) []provider.KeyValue {
 	kvs := make([]provider.KeyValue, 0)
 	for k, v := range secretData {
 		targetKey := k
@@ -278,8 +353,7 @@ func (p *OnePasswordProvider) Fetch(ctx context.Context, mapID string, config ma
 			Value: value,
 		})
 	}
-
-	return kvs, nil
+	return kvs
 }
 
 // parsedRef represents a parsed 1Password reference
