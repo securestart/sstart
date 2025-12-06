@@ -57,6 +57,7 @@ jobs:
           BW_CLIENTSECRET: ${{ secrets.BW_CLIENTSECRET }}
           BW_CLIENTID: ${{ secrets.BW_CLIENTID }}
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          OP_TEST_VAULT_NAME: ${{ secrets.OP_TEST_VAULT_NAME }}
         run: go test -v ./tests/end2end/...
 
   build:
