@@ -32,25 +32,26 @@ func SetupOnePasswordClient(ctx context.Context, t *testing.T) *onepassword.Clie
 	return client
 }
 
-// SetupOnePasswordVault ensures a test vault exists or creates one
-// Returns the vault ID
+// SetupOnePasswordVault resolves vault name to vault ID
+// Assumes the vault exists and is accessible
 func SetupOnePasswordVault(ctx context.Context, t *testing.T, client *onepassword.Client, vaultName string) string {
 	t.Helper()
 
-	// List all vaults to find the vault by name
+	// List all vaults once to find the vault by name
 	vaults, err := client.Vaults().List(ctx)
 	if err != nil {
 		t.Fatalf("Failed to list vaults: %v", err)
 	}
 
+	// Find vault by name (assume it exists)
 	for _, vault := range vaults {
 		if vault.Title == vaultName {
 			return vault.ID
 		}
 	}
 
-	// Vault not found - user needs to create it manually
-	t.Fatalf("Vault '%s' not found. Please create it in 1Password before running tests.", vaultName)
+	// If we get here, vault wasn't found - let the API error naturally
+	t.Fatalf("Vault '%s' not found", vaultName)
 	return ""
 }
 
@@ -132,25 +133,36 @@ func CleanupOnePasswordItem(ctx context.Context, t *testing.T, client *onepasswo
 }
 
 // GetOnePasswordItemByTitle finds an item by title in a vault
+// Fetches the item once after finding it by title
+// Assumes the item exists and is accessible
 func GetOnePasswordItemByTitle(ctx context.Context, t *testing.T, client *onepassword.Client, vaultID, itemTitle string) *onepassword.Item {
 	t.Helper()
 
+	// List items once to find the item by title
 	items, err := client.Items().List(ctx, vaultID)
 	if err != nil {
 		t.Fatalf("Failed to list items in vault: %v", err)
 	}
 
+	// Find item by title (assume it exists)
+	var itemID string
 	for _, itemOverview := range items {
 		if itemOverview.Title == itemTitle {
-			item, err := client.Items().Get(ctx, vaultID, itemOverview.ID)
-			if err != nil {
-				t.Fatalf("Failed to get item: %v", err)
-			}
-			return &item
+			itemID = itemOverview.ID
+			break
 		}
 	}
 
-	t.Fatalf("Item '%s' not found in vault", itemTitle)
-	return nil
+	if itemID == "" {
+		t.Fatalf("Item '%s' not found in vault", itemTitle)
+	}
+
+	// Fetch the item once using the item ID
+	item, err := client.Items().Get(ctx, vaultID, itemID)
+	if err != nil {
+		t.Fatalf("Failed to get item '%s': %v", itemTitle, err)
+	}
+
+	return &item
 }
 

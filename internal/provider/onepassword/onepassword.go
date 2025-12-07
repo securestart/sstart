@@ -72,23 +72,30 @@ func (p *OnePasswordProvider) Fetch(ctx context.Context, mapID string, config ma
 		return nil, fmt.Errorf("failed to parse ref '%s': %w", cfg.Ref, err)
 	}
 
-	// Resolve ambiguous references (field vs section)
-	if err := p.resolveAmbiguousRef(ctx, cfg, parsedRef); err != nil {
+	// Fetch the item once using vault and item from the ref
+	// This is the key optimization: we only make one API call per unique vault/item combination
+	item, err := p.getItem(ctx, parsedRef.Vault, parsedRef.Item)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get item '%s/%s': %w", parsedRef.Vault, parsedRef.Item, err)
+	}
+
+	// Resolve ambiguous references (field vs section) using the already-fetched item
+	if err := p.resolveAmbiguousRef(item, cfg, parsedRef); err != nil {
 		return nil, err
 	}
 
-	// Fetch secrets based on the ref type
+	// Extract secrets from the item based on the ref type
 	var secretData map[string]interface{}
 
 	if parsedRef.Field != "" {
 		// Fetching a specific field (or field in section)
-		secretData, err = p.fetchField(ctx, cfg, parsedRef)
+		secretData, err = p.extractField(item, cfg, parsedRef)
 	} else if parsedRef.Section != "" {
 		// Fetching a whole section
-		secretData, err = p.fetchSection(ctx, cfg, parsedRef)
+		secretData, err = p.extractSection(item, cfg, parsedRef)
 	} else {
 		// Fetching the whole item
-		secretData, err = p.fetchWholeItem(ctx, cfg, parsedRef)
+		secretData, err = p.extractWholeItem(item, cfg, parsedRef)
 	}
 
 	if err != nil {
@@ -100,16 +107,11 @@ func (p *OnePasswordProvider) Fetch(ctx context.Context, mapID string, config ma
 }
 
 // resolveAmbiguousRef resolves ambiguous references where part3 could be a field or section
-func (p *OnePasswordProvider) resolveAmbiguousRef(ctx context.Context, cfg *OnePasswordConfig, parsedRef *parsedRef) error {
+// Uses the already-fetched item to avoid additional API calls
+func (p *OnePasswordProvider) resolveAmbiguousRef(item *onepassword.Item, cfg *OnePasswordConfig, parsedRef *parsedRef) error {
 	// If we have 3 parts (vault/item/part3), we need to determine if part3 is a section or field
 	// Priority: top-level field takes precedence over section with the same name
 	if parsedRef.Section == "" && parsedRef.Field != "" {
-		item, err := p.getItem(ctx, parsedRef.Vault, parsedRef.Item)
-		if err != nil {
-			// If we can't get the item, we'll let the actual fetch handle the error
-			return nil
-		}
-
 		// First, check if there's a top-level field with this name
 		hasTopLevelField := false
 		for _, field := range item.Fields {
@@ -142,12 +144,73 @@ func (p *OnePasswordProvider) resolveAmbiguousRef(ctx context.Context, cfg *OneP
 	return nil
 }
 
-// fetchField fetches a specific field from 1Password
-func (p *OnePasswordProvider) fetchField(ctx context.Context, cfg *OnePasswordConfig, parsedRef *parsedRef) (map[string]interface{}, error) {
-	// Use the SDK's Resolve method which handles name-to-ID resolution
-	value, err := p.client.Secrets().Resolve(ctx, cfg.Ref)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve 1Password secret '%s': %w", cfg.Ref, err)
+// extractField extracts a specific field from an already-fetched 1Password item
+func (p *OnePasswordProvider) extractField(item *onepassword.Item, cfg *OnePasswordConfig, parsedRef *parsedRef) (map[string]interface{}, error) {
+	// Build a map of section IDs to section titles for lookup
+	sectionIDToTitle := make(map[string]string)
+	for _, section := range item.Sections {
+		sectionIDToTitle[section.ID] = section.Title
+	}
+
+	// Find the field by title
+	var fieldValue string
+	var found bool
+
+	if parsedRef.Section != "" {
+		// Looking for a field in a specific section
+		for _, field := range item.Fields {
+			if field.Title == parsedRef.Field {
+				if field.SectionID != nil {
+					sectionTitle := sectionIDToTitle[*field.SectionID]
+					if sectionTitle == parsedRef.Section {
+						fieldValue = field.Value
+						found = true
+						break
+					}
+				}
+			}
+		}
+	} else {
+		// Looking for a top-level field - prioritize top-level fields
+		// First pass: look for top-level fields only
+		for _, field := range item.Fields {
+			if field.Title == parsedRef.Field {
+				// Check if this is a top-level field
+				isTopLevel := false
+				if field.SectionID == nil {
+					isTopLevel = true
+				} else if *field.SectionID == "" {
+					isTopLevel = true
+				} else if sectionIDToTitle[*field.SectionID] == "" {
+					// Field is top-level if its section ID doesn't match any known section
+					isTopLevel = true
+				}
+
+				if isTopLevel {
+					fieldValue = field.Value
+					found = true
+					break
+				}
+			}
+		}
+		// If not found as top-level, this shouldn't happen after resolveAmbiguousRef,
+		// but we'll search all fields as fallback
+		if !found {
+			for _, field := range item.Fields {
+				if field.Title == parsedRef.Field {
+					fieldValue = field.Value
+					found = true
+					break
+				}
+			}
+		}
+	}
+
+	if !found {
+		if parsedRef.Section != "" {
+			return nil, fmt.Errorf("field '%s' not found in section '%s' of item '%s/%s'", parsedRef.Field, parsedRef.Section, parsedRef.Vault, parsedRef.Item)
+		}
+		return nil, fmt.Errorf("field '%s' not found in item '%s/%s'", parsedRef.Field, parsedRef.Vault, parsedRef.Item)
 	}
 
 	// Determine field key
@@ -160,18 +223,12 @@ func (p *OnePasswordProvider) fetchField(ctx context.Context, cfg *OnePasswordCo
 	}
 
 	return map[string]interface{}{
-		fieldName: value,
+		fieldName: fieldValue,
 	}, nil
 }
 
-// fetchSection fetches all fields from a specific section in 1Password
-func (p *OnePasswordProvider) fetchSection(ctx context.Context, cfg *OnePasswordConfig, parsedRef *parsedRef) (map[string]interface{}, error) {
-	// Get the item
-	item, err := p.getItem(ctx, parsedRef.Vault, parsedRef.Item)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get item '%s/%s': %w", parsedRef.Vault, parsedRef.Item, err)
-	}
-
+// extractSection extracts all fields from a specific section in an already-fetched 1Password item
+func (p *OnePasswordProvider) extractSection(item *onepassword.Item, cfg *OnePasswordConfig, parsedRef *parsedRef) (map[string]interface{}, error) {
 	// Find the section by title
 	var sectionID *string
 	for _, section := range item.Sections {
@@ -205,14 +262,8 @@ func (p *OnePasswordProvider) fetchSection(ctx context.Context, cfg *OnePassword
 	return secretData, nil
 }
 
-// fetchWholeItem fetches all fields from a 1Password item
-func (p *OnePasswordProvider) fetchWholeItem(ctx context.Context, cfg *OnePasswordConfig, parsedRef *parsedRef) (map[string]interface{}, error) {
-	// Get the item
-	item, err := p.getItem(ctx, parsedRef.Vault, parsedRef.Item)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get item '%s/%s': %w", parsedRef.Vault, parsedRef.Item, err)
-	}
-
+// extractWholeItem extracts all fields from an already-fetched 1Password item
+func (p *OnePasswordProvider) extractWholeItem(item *onepassword.Item, cfg *OnePasswordConfig, parsedRef *parsedRef) (map[string]interface{}, error) {
 	// Build a map of section IDs to section titles
 	sectionIDToTitle := make(map[string]string)
 	for _, section := range item.Sections {
