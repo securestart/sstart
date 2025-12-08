@@ -40,10 +40,16 @@ func TestE2E_Infisical_WithKeys(t *testing.T) {
 	secretKey3 := "INFISICAL_CONFIG"
 	secretValue3 := "infisical-config-value"
 
-	// Setup test secrets (create or update them)
-	SetupInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey1, secretValue1)
-	SetupInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey2, secretValue2)
-	SetupInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey3, secretValue3)
+	// Setup test secrets using batch create
+	testSecrets := map[string]string{
+		secretKey1: secretValue1,
+		secretKey2: secretValue2,
+		secretKey3: secretValue3,
+	}
+	SetupInfisicalSecretsBatch(ctx, t, client, projectID, environment, secretPath, testSecrets)
+
+	// Cleanup: delete test secrets after test completes using batch delete
+	defer DeleteInfisicalSecretsBatch(ctx, t, client, projectID, environment, secretPath, []string{secretKey1, secretKey2, secretKey3})
 
 	// Create temporary config file
 	tmpDir := t.TempDir()
@@ -126,10 +132,16 @@ func TestE2E_Infisical_NoKeys(t *testing.T) {
 	secretKey3 := "INFISICAL_CONFIG"
 	secretValue3 := "infisical-config-value"
 
-	// Setup test secrets (create or update them)
-	SetupInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey1, secretValue1)
-	SetupInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey2, secretValue2)
-	SetupInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey3, secretValue3)
+	// Setup test secrets using batch create
+	testSecrets := map[string]string{
+		secretKey1: secretValue1,
+		secretKey2: secretValue2,
+		secretKey3: secretValue3,
+	}
+	SetupInfisicalSecretsBatch(ctx, t, client, projectID, environment, secretPath, testSecrets)
+
+	// Cleanup: delete test secrets after test completes using batch delete
+	defer DeleteInfisicalSecretsBatch(ctx, t, client, projectID, environment, secretPath, []string{secretKey1, secretKey2, secretKey3})
 
 	// Create temporary config file
 	tmpDir := t.TempDir()
@@ -186,8 +198,6 @@ providers:
 	if len(collectedSecrets) != expectedCount {
 		t.Errorf("Expected %d secrets, got %d. Secrets: %v", expectedCount, len(collectedSecrets), collectedSecrets)
 	}
-
-	t.Logf("Successfully collected %d secrets from Infisical provider without key mappings", len(collectedSecrets))
 }
 
 // TestE2E_Infisical_WithOptionalParams tests the Infisical provider with optional parameters
@@ -208,6 +218,9 @@ func TestE2E_Infisical_WithOptionalParams(t *testing.T) {
 
 	// Setup test secrets (create or update them)
 	SetupInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey1, secretValue1)
+
+	// Cleanup: delete test secret after test completes
+	defer DeleteInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey1)
 
 	// Create temporary config file with optional parameters
 	tmpDir := t.TempDir()
@@ -271,6 +284,9 @@ func TestE2E_Infisical_VerifySecretExists(t *testing.T) {
 
 	// Setup test secret
 	SetupInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey, secretValue)
+
+	// Cleanup: delete test secret after test completes
+	defer DeleteInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey)
 
 	// Verify the secret exists
 	VerifyInfisicalSecretExists(ctx, t, client, projectID, environment, secretPath, secretKey)

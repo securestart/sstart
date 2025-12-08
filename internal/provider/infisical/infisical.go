@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/dirathea/sstart/internal/provider"
@@ -142,21 +141,13 @@ func (p *InfisicalProvider) ensureClient(ctx context.Context) error {
 		return nil
 	}
 
-	log.Printf("[Infisical] Initializing Infisical client...")
-
 	// Check for required environment variables
 	clientID := os.Getenv("INFISICAL_UNIVERSAL_AUTH_CLIENT_ID")
 	clientSecret := os.Getenv("INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET")
 
 	if clientID == "" || clientSecret == "" {
-		log.Printf("[Infisical] ERROR: Missing required environment variables")
-		log.Printf("[Infisical] INFISICAL_UNIVERSAL_AUTH_CLIENT_ID is set: %v", clientID != "")
-		log.Printf("[Infisical] INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET is set: %v", clientSecret != "")
 		return fmt.Errorf("INFISICAL_UNIVERSAL_AUTH_CLIENT_ID and INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET environment variables are required")
 	}
-
-	log.Printf("[Infisical] Found INFISICAL_UNIVERSAL_AUTH_CLIENT_ID (length: %d)", len(clientID))
-	log.Printf("[Infisical] Found INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET (length: %d)", len(clientSecret))
 
 	// Get site URL from environment variable (optional, defaults to https://app.infisical.com)
 	siteURL := os.Getenv("INFISICAL_SITE_URL")
@@ -165,43 +156,17 @@ func (p *InfisicalProvider) ensureClient(ctx context.Context) error {
 	clientConfig := infisical.Config{}
 	if siteURL != "" {
 		clientConfig.SiteUrl = siteURL
-		log.Printf("[Infisical] Using custom site URL: %s", siteURL)
-	} else {
-		log.Printf("[Infisical] Using default site URL: https://app.infisical.com")
 	}
 
 	// Create client with config
-	log.Printf("[Infisical] Creating Infisical client...")
 	client := infisical.NewInfisicalClient(ctx, clientConfig)
 
 	// Authenticate using universal auth (pass env vars as parameters)
-	log.Printf("[Infisical] Attempting Universal Auth login to: %s", clientConfig.SiteUrl)
-	credential, err := client.Auth().UniversalAuthLogin(clientID, clientSecret)
+	_, err := client.Auth().UniversalAuthLogin(clientID, clientSecret)
 	if err != nil {
-		log.Printf("[Infisical] ERROR: Authentication failed")
-		log.Printf("[Infisical]   Error: %v", err)
-		log.Printf("[Infisical]   Site URL: %s", clientConfig.SiteUrl)
-		log.Printf("[Infisical]   Client ID length: %d", len(clientID))
-		if len(clientID) > 8 {
-			log.Printf("[Infisical]   Client ID prefix: %s...", clientID[:8])
-		} else {
-			log.Printf("[Infisical]   Client ID: %s", clientID)
-		}
-		log.Printf("[Infisical]   Client Secret length: %d", len(clientSecret))
-		if len(clientSecret) > 8 {
-			log.Printf("[Infisical]   Client Secret prefix: %s...", clientSecret[:8])
-		} else {
-			log.Printf("[Infisical]   Client Secret: %s", clientSecret)
-		}
-		return fmt.Errorf("failed to authenticate with Infisical (401 Unauthorized): %w", err)
+		return fmt.Errorf("failed to authenticate with Infisical: %w", err)
 	}
 
-	// Log successful authentication (check if AccessToken field exists)
-	if credential.AccessToken != "" {
-		log.Printf("[Infisical] Successfully authenticated (Access Token length: %d)", len(credential.AccessToken))
-	} else {
-		log.Printf("[Infisical] Successfully authenticated")
-	}
 	p.client = client
 	return nil
 }

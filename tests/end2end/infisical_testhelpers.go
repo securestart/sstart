@@ -111,6 +111,46 @@ func SetupInfisicalSecret(ctx context.Context, t *testing.T, client infisical.In
 	}
 }
 
+// SetupInfisicalSecretsBatch creates or updates multiple secrets in Infisical using batch operations
+// secrets is a map of secretKey -> secretValue
+func SetupInfisicalSecretsBatch(ctx context.Context, t *testing.T, client infisical.InfisicalClientInterface, projectID, environment, secretPath string, secrets map[string]string) {
+	t.Helper()
+
+	if len(secrets) == 0 {
+		return
+	}
+
+	// Ensure the path exists
+	EnsureInfisicalPathExists(ctx, t, client, projectID, environment, secretPath)
+
+	// Build batch create secrets array
+	batchSecrets := make([]infisical.BatchCreateSecret, 0, len(secrets))
+	for secretKey, secretValue := range secrets {
+		batchSecrets = append(batchSecrets, infisical.BatchCreateSecret{
+			SecretKey:   secretKey,
+			SecretValue: secretValue,
+		})
+	}
+
+	// Create batch options
+	batchOptions := infisical.BatchCreateSecretsOptions{
+		ProjectID:   projectID,
+		Environment: environment,
+		SecretPath:  secretPath,
+		Secrets:     batchSecrets,
+	}
+
+	// Try batch create first
+	_, err := client.Secrets().Batch().Create(batchOptions)
+	if err != nil {
+		// If batch create fails, fall back to individual create/update
+		t.Logf("Batch create failed, falling back to individual operations: %v", err)
+		for secretKey, secretValue := range secrets {
+			SetupInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey, secretValue)
+		}
+	}
+}
+
 // VerifyInfisicalSecretExists checks if a secret exists in Infisical
 func VerifyInfisicalSecretExists(ctx context.Context, t *testing.T, client infisical.InfisicalClientInterface, projectID, environment, secretPath, secretKey string) {
 	t.Helper()
@@ -134,4 +174,38 @@ func VerifyInfisicalSecretExists(ctx context.Context, t *testing.T, client infis
 
 	t.Skipf("Skipping test: Secret '%s' does not exist at path '%s' in environment '%s' of project '%s'. "+
 		"Please create it beforehand in your Infisical project.", secretKey, secretPath, environment, projectID)
+}
+
+// DeleteInfisicalSecret deletes a secret from Infisical (if it exists)
+func DeleteInfisicalSecret(ctx context.Context, t *testing.T, client infisical.InfisicalClientInterface, projectID, environment, secretPath, secretKey string) {
+	t.Helper()
+
+	// Delete the secret using key, path, project, and environment
+	deleteOptions := infisical.DeleteSecretOptions{
+		SecretKey:   secretKey,
+		ProjectID:   projectID,
+		Environment: environment,
+		SecretPath:  secretPath,
+	}
+	_, err := client.Secrets().Delete(deleteOptions)
+	if err != nil {
+		// Log but don't fail - the secret might not exist, which is fine
+		t.Logf("Note: Could not delete secret '%s' from Infisical (may not exist): %v", secretKey, err)
+	}
+}
+
+// DeleteInfisicalSecretsBatch deletes multiple secrets from Infisical (if they exist)
+// secretKeys is a slice of secret keys to delete
+func DeleteInfisicalSecretsBatch(ctx context.Context, t *testing.T, client infisical.InfisicalClientInterface, projectID, environment, secretPath string, secretKeys []string) {
+	t.Helper()
+
+	if len(secretKeys) == 0 {
+		return
+	}
+
+	// Delete each secret individually (batch delete not available in SDK)
+	// This is still more efficient than calling the function multiple times from tests
+	for _, secretKey := range secretKeys {
+		DeleteInfisicalSecret(ctx, t, client, projectID, environment, secretPath, secretKey)
+	}
 }
