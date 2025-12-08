@@ -44,6 +44,84 @@ jobs:
           rm bw.zip
           bw --version
 
+      - name: Determine which tests to run
+        id: test_filter
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const { data: files } = await github.rest.pulls.listFiles({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+              });
+              
+              const changedFiles = files.map(f => f.filename);
+              console.log('Changed files:', changedFiles);
+              
+              // Map provider directories to test name prefixes
+              const providerTestMap = {
+                'internal/provider/aws/': ['TestE2E_AWSSecretsManager'],
+                'internal/provider/azurekeyvault/': ['TestE2E_AzureKeyVault'],
+                'internal/provider/bitwarden/': ['TestE2E_Bitwarden', 'TestE2E_BitwardenSM'],
+                'internal/provider/gcsm/': ['TestE2E_GCSM'],
+                'internal/provider/infisical/': ['TestE2E_Infisical'],
+                'internal/provider/onepassword/': ['TestE2E_OnePassword'],
+                'internal/provider/vault/': ['TestE2E_Vault'],
+              };
+              
+              // Core files that require all tests
+              const corePaths = [
+                'internal/secrets/',
+                'internal/config/',
+                'internal/app/',
+                'internal/cli/',
+                'tests/end2end/',
+                'cmd/',
+              ];
+              
+              // Check if any core files changed
+              const hasCoreChanges = changedFiles.some(file => 
+                corePaths.some(path => file.startsWith(path))
+              );
+              
+              if (hasCoreChanges) {
+                console.log('Core files changed, running all tests');
+                core.setOutput('test_filter', '');
+                core.setOutput('run_all_tests', 'true');
+                return;
+              }
+              
+              // Find which providers changed
+              const affectedTests = new Set();
+              
+              for (const file of changedFiles) {
+                for (const [providerPath, testNames] of Object.entries(providerTestMap)) {
+                  if (file.startsWith(providerPath)) {
+                    testNames.forEach(test => affectedTests.add(test));
+                  }
+                }
+              }
+              
+              if (affectedTests.size === 0) {
+                console.log('No provider changes detected, running all tests');
+                core.setOutput('test_filter', '');
+                core.setOutput('run_all_tests', 'true');
+                return;
+              }
+              
+              // Construct test filter regex (matches any of the affected tests)
+              // Format: TestE2E_(Provider1|Provider2) for go test -run flag
+              const testFilter = Array.from(affectedTests).join('|');
+              console.log('Running selective tests:', testFilter);
+              core.setOutput('test_filter', testFilter);
+              core.setOutput('run_all_tests', 'false');
+            } catch (error) {
+              console.log('Error determining test filter, running all tests:', error.message);
+              core.setOutput('test_filter', '');
+              core.setOutput('run_all_tests', 'true');
+            }
+
       - name: Run end-to-end tests
         env:
           CGO_LDFLAGS: -lm
@@ -55,7 +133,18 @@ jobs:
           BW_CLIENTID: ${{ secrets.BW_CLIENTID }}
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           OP_TEST_VAULT_NAME: ${{ secrets.OP_TEST_VAULT_NAME }}
-        run: go test -v ./tests/end2end/...
+          SSTART_E2E_INFISICAL_PROJECT_ID: ${{ secrets.SSTART_E2E_INFISICAL_PROJECT_ID }}
+          SSTART_E2E_INFISICAL_ENVIRONMENT: ${{ secrets.SSTART_E2E_INFISICAL_ENVIRONMENT }}
+          INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET }}
+          INFISICAL_UNIVERSAL_AUTH_CLIENT_ID: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_ID }}
+        run: |
+          if [ "${{ steps.test_filter.outputs.run_all_tests }}" = "true" ]; then
+            echo "Running all end-to-end tests"
+            go test -v ./tests/end2end/...
+          else
+            echo "Running selective tests: ${{ steps.test_filter.outputs.test_filter }}"
+            go test -v -run "${{ steps.test_filter.outputs.test_filter }}" ./tests/end2end/...
+          fi
 
   build:
     name: Build

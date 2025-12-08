@@ -104,8 +104,6 @@ providers:
 	if len(collectedSecrets) != expectedCount {
 		t.Errorf("Expected %d secrets, got %d. Secrets: %v", expectedCount, len(collectedSecrets), collectedSecrets)
 	}
-
-	t.Logf("Successfully collected %d secrets from Infisical provider", len(collectedSecrets))
 }
 
 // TestE2E_Infisical_NoKeys tests the Infisical provider without key mappings
@@ -253,8 +251,6 @@ providers:
 	} else if actualValue != secretValue1 {
 		t.Errorf("Secret '%s' from Infisical: expected '%s', got '%s'", secretKey1, secretValue1, actualValue)
 	}
-
-	t.Logf("Successfully collected secrets from Infisical provider with optional parameters")
 }
 
 // TestE2E_Infisical_VerifySecretExists tests that the test setup can verify secrets exist
@@ -278,6 +274,4 @@ func TestE2E_Infisical_VerifySecretExists(t *testing.T) {
 
 	// Verify the secret exists
 	VerifyInfisicalSecretExists(ctx, t, client, projectID, environment, secretPath, secretKey)
-
-	t.Logf("Successfully verified secret exists in Infisical")
 }
