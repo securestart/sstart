@@ -123,8 +123,11 @@ jobs:
           script: |
             const shortSha = context.sha.substring(0, 7);
             const edgeVersion = `edge+${shortSha}`;
+            const buildDate = new Date().toISOString();
             core.setOutput('version', edgeVersion);
+            core.setOutput('date', buildDate);
             console.log(`Calculated version: ${edgeVersion}`);
+            console.log(`Build date: ${buildDate}`);
 
       - name: Build binary
         env:
@@ -134,7 +137,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           go build \
-            -ldflags="-s -w -X github.com/dirathea/sstart/internal/cli.version=${{ steps.version.outputs.version }} -X github.com/dirathea/sstart/internal/cli.commit=${{ github.sha }} -X github.com/dirathea/sstart/internal/cli.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -ldflags="-s -w -X github.com/dirathea/sstart/internal/cli.version=${{ steps.version.outputs.version }} -X github.com/dirathea/sstart/internal/cli.commit=${{ github.sha }} -X github.com/dirathea/sstart/internal/cli.date=${{ steps.version.outputs.date }}" \
             -o ${{ matrix.binary_name }} \
             ./cmd/sstart
 
