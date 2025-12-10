@@ -21,15 +21,24 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Verify Docker is available
-        run: |
-          docker --version
-          docker info
+      - name: Setup env via sstart
+        uses: dirathea/setup-sstart-env@main
+        env:
+          INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET }}
+          INFISICAL_UNIVERSAL_AUTH_CLIENT_ID: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_ID }}
+          INFISICAL_SITE_URL: ${{ secrets.INFISICAL_SITE_URL }}
+        with:
+          config: |
+            providers:
+              - kind: infisical
+                project_id: 8aded323-e110-4f48-9c7f-24c275358609
+                environment: prod
+                path: github
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          credentials_json: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -125,19 +134,7 @@ jobs:
       - name: Run end-to-end tests
         env:
           CGO_LDFLAGS: -lm
-          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          SSTART_E2E_BITWARDEN_ORGANIZATION_ID: ${{ secrets.SSTART_E2E_BITWARDEN_ORGANIZATION_ID }}
-          BITWARDEN_SM_ACCESS_TOKEN: ${{ secrets.BITWARDEN_SM_ACCESS_TOKEN }}
-          BW_PASSWORD: ${{ secrets.BW_PASSWORD }}
-          BW_CLIENTSECRET: ${{ secrets.BW_CLIENTSECRET }}
-          BW_CLIENTID: ${{ secrets.BW_CLIENTID }}
-          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-          OP_TEST_VAULT_NAME: ${{ secrets.OP_TEST_VAULT_NAME }}
-          SSTART_E2E_INFISICAL_PROJECT_ID: ${{ secrets.SSTART_E2E_INFISICAL_PROJECT_ID }}
-          SSTART_E2E_INFISICAL_ENVIRONMENT: ${{ secrets.SSTART_E2E_INFISICAL_ENVIRONMENT }}
-          INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET }}
-          INFISICAL_UNIVERSAL_AUTH_CLIENT_ID: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_ID }}
-          INFISICAL_SITE_URL: ${{ secrets.INFISICAL_SITE_URL }}
+          # the rest of env supplied by setup-sstart-env
         run: |
           if [ "${{ steps.test_filter.outputs.run_all_tests }}" = "true" ]; then
             echo "Running all end-to-end tests"
