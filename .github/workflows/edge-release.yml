@@ -74,6 +74,11 @@ jobs:
             goos: linux
             goarch: amd64
             binary_name: sstart
+          - build_id: sstart-linux-arm64
+            runner: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            binary_name: sstart
           - build_id: sstart-darwin-amd64
             runner: macos-latest
             goos: darwin
@@ -95,6 +100,16 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Install Linux ARM64 cross-compilation toolchain (Linux ARM64 only)
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          echo "AR=aarch64-linux-gnu-ar" >> $GITHUB_ENV
+          echo "AS=aarch64-linux-gnu-as" >> $GITHUB_ENV
 
       - name: Calculate version
         id: version
@@ -212,7 +227,7 @@ jobs:
             Edge release built from commit ${{ github.sha }}
             
             ## Assets
-            - Pre-built binaries for Linux (amd64) and macOS (amd64, arm64)
+            - Pre-built binaries for Linux (amd64, arm64) and macOS (amd64, arm64)
             - Checksums file for verification
           files: release/*
           draft: false
