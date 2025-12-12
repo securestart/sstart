@@ -23,6 +23,20 @@ type DopplerConfig struct {
 	APIHost string `json:"api_host,omitempty" yaml:"api_host,omitempty"`
 }
 
+// dopplerSecretInfo represents a single secret from the Doppler API response
+type dopplerSecretInfo struct {
+	Raw                string `json:"raw"`
+	Computed           string `json:"computed"`
+	Note               string `json:"note"`
+	RawVisibility      string `json:"rawVisibility"`
+	ComputedVisibility string `json:"computedVisibility"`
+}
+
+// dopplerSecretsResponse represents the response from the Doppler API secrets endpoint
+type dopplerSecretsResponse struct {
+	Secrets map[string]dopplerSecretInfo `json:"secrets"`
+}
+
 // DopplerProvider implements the provider interface for Doppler
 type DopplerProvider struct {
 	client *http.Client
@@ -45,18 +59,10 @@ func (p *DopplerProvider) Name() string {
 
 // Fetch fetches secrets from Doppler
 func (p *DopplerProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
-	// Convert map to strongly typed config struct
-	cfg, err := parseConfig(config)
+	// Parse and validate configuration
+	cfg, err := validateConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("invalid doppler configuration: %w", err)
-	}
-
-	// Validate required fields
-	if cfg.Project == "" {
-		return nil, fmt.Errorf("doppler provider requires 'project' field in configuration")
-	}
-	if cfg.Config == "" {
-		return nil, fmt.Errorf("doppler provider requires 'config' field in configuration")
+		return nil, err
 	}
 
 	// Get service token from environment
@@ -73,7 +79,7 @@ func (p *DopplerProvider) Fetch(ctx context.Context, mapID string, config map[st
 
 	// Build API URL with properly encoded query parameters
 	// According to Doppler API docs: https://docs.doppler.com/reference/api
-	// Use /v3/configs/config/secrets endpoint (not /download) to get detailed response
+	// Use /v3/configs/config/secrets endpoint to get detailed response
 	// Set include_managed_secrets=false to exclude Doppler's auto-generated secrets (DOPPLER_CONFIG, DOPPLER_ENVIRONMENT, DOPPLER_PROJECT)
 	apiURL := fmt.Sprintf("%s/v3/configs/config/secrets?project=%s&config=%s&include_managed_secrets=false",
 		apiHost, url.QueryEscape(cfg.Project), url.QueryEscape(cfg.Config))
@@ -107,28 +113,7 @@ func (p *DopplerProvider) Fetch(ctx context.Context, mapID string, config map[st
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Parse JSON response - expected structure:
-	// {
-	//   "secrets": {
-	//     "SECRET_NAME": {
-	//       "raw": "...",
-	//       "computed": "...",
-	//       "note": "",
-	//       "rawVisibility": "...",
-	//       "computedVisibility": "..."
-	//     }
-	//   }
-	// }
-	var response struct {
-		Secrets map[string]struct {
-			Raw                string `json:"raw"`
-			Computed           string `json:"computed"`
-			Note               string `json:"note"`
-			RawVisibility      string `json:"rawVisibility"`
-			ComputedVisibility string `json:"computedVisibility"`
-		} `json:"secrets"`
-	}
-
+	var response dopplerSecretsResponse
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON response: %w", err)
 	}
@@ -162,6 +147,25 @@ func (p *DopplerProvider) Fetch(ctx context.Context, mapID string, config map[st
 	}
 
 	return kvs, nil
+}
+
+// validateConfig parses and validates the Doppler configuration
+func validateConfig(config map[string]interface{}) (*DopplerConfig, error) {
+	// Parse config map to strongly typed struct
+	cfg, err := parseConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("invalid doppler configuration: %w", err)
+	}
+
+	// Validate required fields
+	if cfg.Project == "" {
+		return nil, fmt.Errorf("doppler provider requires 'project' field in configuration")
+	}
+	if cfg.Config == "" {
+		return nil, fmt.Errorf("doppler provider requires 'config' field in configuration")
+	}
+
+	return cfg, nil
 }
 
 // parseConfig converts a map[string]interface{} to DopplerConfig

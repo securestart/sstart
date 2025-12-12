@@ -198,28 +198,3 @@ providers:
 
 	t.Logf("Successfully collected %d secrets from Doppler provider without key mappings", len(collectedSecrets))
 }
-
-// TestE2E_Doppler_VerifySecretExists tests that the test setup can verify secrets exist
-func TestE2E_Doppler_VerifySecretExists(t *testing.T) {
-	ctx := context.Background()
-
-	// Setup Doppler client
-	client := SetupDopplerClient(ctx, t)
-
-	// Get test project and config from environment variables
-	project := GetDopplerTestProject(t)
-	dopplerConfig := GetDopplerTestConfig(t)
-
-	// Test secret
-	secretKey := "DOPPLER_TEST_SECRET"
-	secretValue := "test-value-for-verification"
-
-	// Setup test secret
-	SetupDopplerSecret(ctx, t, client, project, dopplerConfig, secretKey, secretValue)
-
-	// Cleanup: delete test secret after test completes
-	defer DeleteDopplerSecret(ctx, t, client, project, dopplerConfig, secretKey)
-
-	// Verify the secret exists
-	VerifyDopplerSecretExists(ctx, t, client, project, dopplerConfig, secretKey)
-}
