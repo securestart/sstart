@@ -76,7 +76,7 @@ jobs:
                 'internal/provider/gcsm/': ['TestE2E_GCSM'],
                 'internal/provider/infisical/': ['TestE2E_Infisical'],
                 'internal/provider/onepassword/': ['TestE2E_OnePassword'],
-                'internal/provider/vault/': ['TestE2E_Vault'],
+                'internal/provider/vault/': ['TestE2E_Vault', 'TestE2E_OpenBao'],
               };
               
               // Core files that require all tests
@@ -98,6 +98,7 @@ jobs:
                 console.log('Core files changed, running all tests');
                 core.setOutput('test_filter', '');
                 core.setOutput('run_all_tests', 'true');
+                core.setOutput('skip_tests', 'false');
                 return;
               }
               
@@ -113,9 +114,10 @@ jobs:
               }
               
               if (affectedTests.size === 0) {
-                console.log('No provider changes detected, running all tests');
+                console.log('No provider changes detected, skipping end2end tests');
                 core.setOutput('test_filter', '');
-                core.setOutput('run_all_tests', 'true');
+                core.setOutput('run_all_tests', 'false');
+                core.setOutput('skip_tests', 'true');
                 return;
               }
               
@@ -125,13 +127,16 @@ jobs:
               console.log('Running selective tests:', testFilter);
               core.setOutput('test_filter', testFilter);
               core.setOutput('run_all_tests', 'false');
+              core.setOutput('skip_tests', 'false');
             } catch (error) {
               console.log('Error determining test filter, running all tests:', error.message);
               core.setOutput('test_filter', '');
               core.setOutput('run_all_tests', 'true');
+              core.setOutput('skip_tests', 'false');
             }
 
       - name: Run end-to-end tests
+        if: steps.test_filter.outputs.skip_tests != 'true'
         env:
           CGO_LDFLAGS: -lm
           # the rest of env supplied by setup-sstart-env
@@ -143,6 +148,11 @@ jobs:
             echo "Running selective tests: ${{ steps.test_filter.outputs.test_filter }}"
             go test -v -run "${{ steps.test_filter.outputs.test_filter }}" ./tests/end2end/...
           fi
+      
+      - name: Skip end-to-end tests
+        if: steps.test_filter.outputs.skip_tests == 'true'
+        run: |
+          echo "No provider changes detected. Skipping end-to-end tests."
 
   build:
     name: Build

@@ -30,6 +30,7 @@ providers:
 | `bitwarden_sm` | Stable |
 | `dotenv` | Stable |
 | `gcloud_secretmanager` | Stable |
+| `infisical` | Stable |
 | `vault` | Stable |
 
 ## Provider Configuration
@@ -73,14 +74,9 @@ providers:
   - kind: 1password
     id: onepassword-db
     ref: op://Production/MyApp/Database
-    keys:
-      HOST: DB_HOST
-      PORT: DB_PORT
-      USERNAME: DB_USER
-      PASSWORD: DB_PASSWORD
 ```
 
-This example fetches all fields from the "Database" section. When using `keys`, only the specified fields will be mapped. If `keys` is omitted, all fields from the section will be loaded.
+This example fetches all fields from the "Database" section. All fields from the section will be loaded as environment variables.
 
 **Example - Fetch whole item with section prefixes:**
 ```yaml
@@ -89,11 +85,6 @@ providers:
     id: onepassword-app
     ref: op://Production/MyApp
     use_section_prefix: true
-    keys:
-      API_KEY: ==
-      Database_HOST: ==
-      Database_PORT: ==
-      Redis_HOST: ==
 ```
 
 This example fetches all fields from the entire item. With `use_section_prefix: true`, fields from sections are prefixed (e.g., `Database_HOST`), while top-level fields remain unprefixed (e.g., `API_KEY`).
@@ -176,9 +167,6 @@ providers:
     id: aws-prod
     secret_id: myapp/production
     region: us-east-1
-    keys:
-      API_KEY: ==
-      DATABASE_URL: ==
 ```
 
 **JSON Secrets:**
@@ -212,10 +200,6 @@ providers:
     id: azure-prod
     vault_url: https://myvault.vault.azure.net/
     secret_name: myapp/production
-    keys:
-      API_KEY: AZURE_API_KEY
-      DB_PASSWORD: AZURE_DB_PASSWORD
-      JWT_SECRET: ==  # Keep same name
 ```
 
 **JSON Secrets:**
@@ -239,9 +223,6 @@ providers:
   - kind: dotenv
     id: dev
     path: .env.local
-    keys:
-      LOCAL_API_KEY: API_KEY
-      LOCAL_DB_URL: DATABASE_URL
 ```
 
 **Note:** The path supports environment variable expansion using `${VAR}` or `$VAR` syntax:
@@ -275,9 +256,6 @@ providers:
     project_id: my-gcp-project
     secret_id: myapp/production
     version: latest
-    keys:
-      API_KEY: ==
-      DATABASE_URL: ==
 ```
 
 **JSON Secrets:**
@@ -287,6 +265,68 @@ If the secret value in Google Cloud Secret Manager is a JSON object, it will be 
 If the secret value is plain text (not JSON), it will be mapped to a single environment variable named `<PROVIDER_ID>_SECRET` (where `<PROVIDER_ID>` is the provider's ID in uppercase, with hyphens converted to underscores). A warning will be logged indicating that the secret is not in JSON format.
 
 For example, if the provider ID is `aws-prod`, the secret will be loaded to `AWS_PROD_SECRET`.
+
+### Infisical (`infisical`)
+
+Retrieves secrets from Infisical, an open-source secrets management platform. Supports fetching secrets from specific paths within a project and environment, with options for recursive fetching, imports, and secret expansion.
+
+**Dependencies:**
+- No CLI required. Uses the Infisical Go SDK directly.
+
+**Configuration:**
+- `project_id` (required): The Infisical project ID where secrets are stored
+- `environment` (required): The environment slug (e.g., `dev`, `prod`, `staging`)
+- `path` (required): The secret path from where to fetch secrets (e.g., `/`, `/api`, `/database`)
+- `recursive` (optional): Whether to fetch secrets recursively from subdirectories. Defaults to `false`
+- `include_imports` (optional): Whether to include imported secrets. Defaults to `false`
+- `expand_secrets` (optional): Whether to expand secret references. Defaults to `false`
+
+**Authentication:**
+Infisical authentication must be provided via environment variables:
+- `INFISICAL_UNIVERSAL_AUTH_CLIENT_ID` (required): Client ID for Infisical Universal Auth
+- `INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET` (required): Client secret for Infisical Universal Auth
+- `INFISICAL_SITE_URL` (optional): Infisical server URL (defaults to `https://app.infisical.com` for self-hosted instances)
+
+**Example:**
+```yaml
+providers:
+  - kind: infisical
+    id: infisical-prod
+    project_id: proj-abc123-def456
+    environment: production
+    path: /api
+```
+
+**Example with optional parameters:**
+```yaml
+providers:
+  - kind: infisical
+    id: infisical-prod
+    project_id: proj-abc123-def456
+    environment: production
+    path: /
+    recursive: true
+    include_imports: true
+    expand_secrets: true
+```
+
+Set environment variables:
+```bash
+export INFISICAL_UNIVERSAL_AUTH_CLIENT_ID="your-client-id"
+export INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET="your-client-secret"
+# Optional for self-hosted instances:
+export INFISICAL_SITE_URL="https://infisical.example.com"
+```
+
+**How it works:**
+The provider uses the Infisical Go SDK to authenticate with Infisical using Universal Auth credentials. It fetches secrets from the specified project, environment, and path, then makes them available as environment variables. Secrets are retrieved as key-value pairs where each secret's key becomes an environment variable name.
+
+**Path Behavior:**
+- Use `/` to fetch secrets from the root of the project
+- Use `/path/to/secrets` to fetch secrets from a specific path
+- When `recursive: true`, secrets from subdirectories are also included
+- When `include_imports: true`, secrets imported from other projects are included
+- When `expand_secrets: true`, secret references (e.g., `${OTHER_SECRET}`) are expanded to their actual values
 
 ### HashiCorp Vault / OpenBao (`vault`)
 
@@ -311,9 +351,6 @@ providers:
     address: https://vault.example.com:8200
     mount: secret
     path: myapp/production
-    keys:
-      API_KEY: ==
-      DATABASE_URL: ==
 ```
 
 **KV v1 and v2 Support:**
@@ -330,9 +367,6 @@ providers:
     mount: secret
     path: myapp/production
     token: your-openbao-token
-    keys:
-      API_KEY: ==
-      DATABASE_URL: ==
 ```
 
 The provider uses the same HashiCorp Vault API client, which is compatible with OpenBao's API. All features, including KV v1/v2 support, work identically with both Vault and OpenBao.
@@ -369,9 +403,6 @@ providers:
     server_url: https://vault.bitwarden.com
     item_id: abc123-def456-ghi789
     format: note
-    keys:
-      API_KEY: ==
-      DATABASE_URL: ==
 ```
 
 Set environment variables:
@@ -391,9 +422,6 @@ providers:
     server_url: https://vault.bitwarden.com
     item_id: abc123-def456-ghi789
     format: fields
-    keys:
-      API_KEY: BITWARDEN_API_KEY
-      DB_PASSWORD: BITWARDEN_DB_PASSWORD
 ```
 
 **Example with Both format (notes and fields):**
@@ -404,9 +432,6 @@ providers:
     server_url: https://vault.bitwarden.com
     item_id: abc123-def456-ghi789
     format: both
-    keys:
-      API_KEY: ==
-      DB_PASSWORD: ==
 ```
 
 **Note Format:**
@@ -452,9 +477,6 @@ providers:
     organization_id: org-abc123-def456
     project_id: proj-ghi789-jkl012
     server_url: https://vault.bitwarden.com
-    keys:
-      API_KEY: ==
-      DATABASE_URL: ==
 ```
 
 Set environment variables:
