@@ -60,7 +60,7 @@ func TestDotEnvProvider_Fetch_ConfigValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			_, err := provider.Fetch(ctx, "test-map", tt.config, nil)
+			_, err := provider.Fetch(ctx, "test-map", tt.config)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DotEnvProvider.Fetch() error = %v, wantErr %v", err, tt.wantErr)
@@ -155,7 +155,7 @@ func TestDotEnvProvider_Fetch_WithValidFile(t *testing.T) {
 DATABASE_URL=postgres://localhost:5432/testdb
 SECRET_VALUE=my-secret-value
 `
-	err := os.WriteFile(envFile, []byte(envContent), 0644)
+	err := os.WriteFile(envFile, []byte(envContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test .env file: %v", err)
 	}
@@ -167,7 +167,7 @@ SECRET_VALUE=my-secret-value
 	ctx := context.Background()
 
 	// Test fetching all keys (empty keys map)
-	result, err := provider.Fetch(ctx, "test-map", config, nil)
+	result, err := provider.Fetch(ctx, "test-map", config)
 	if err != nil {
 		t.Fatalf("DotEnvProvider.Fetch() error = %v", err)
 	}
@@ -202,7 +202,7 @@ func TestDotEnvProvider_Fetch_WithKeyMapping(t *testing.T) {
 DATABASE_URL=postgres://localhost:5432/testdb
 OTHER_VALUE=should-not-appear
 `
-	err := os.WriteFile(envFile, []byte(envContent), 0644)
+	err := os.WriteFile(envFile, []byte(envContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test .env file: %v", err)
 	}
@@ -211,13 +211,8 @@ OTHER_VALUE=should-not-appear
 		"path": envFile,
 	}
 
-	keys := map[string]string{
-		"API_KEY":      "==", // Keep same name
-		"DATABASE_URL": "DB_URL",
-	}
-
 	ctx := context.Background()
-	result, err := provider.Fetch(ctx, "test-map", config, keys)
+	result, err := provider.Fetch(ctx, "test-map", config)
 	if err != nil {
 		t.Fatalf("DotEnvProvider.Fetch() error = %v", err)
 	}
@@ -228,8 +223,8 @@ OTHER_VALUE=should-not-appear
 
 	// Verify mappings
 	expectedKeys := map[string]string{
-		"API_KEY": "test-api-key",
-		"DB_URL":  "postgres://localhost:5432/testdb",
+		"API_KEY":      "test-api-key",
+		"DATABASE_URL": "postgres://localhost:5432/testdb",
 	}
 
 	for _, kv := range result {
@@ -275,4 +270,3 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
-

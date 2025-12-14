@@ -10,9 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	runProviders []string
-)
+var runProviders []string
 
 var runCmd = &cobra.Command{
 	Use:   "run [flags] -- <command> [args...]",

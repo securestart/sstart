@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/joho/godotenv"
 	"github.com/dirathea/sstart/internal/provider"
+	"github.com/joho/godotenv"
 )
 
 // DotEnvProvider implements the provider interface for .env files
@@ -24,7 +24,7 @@ func (p *DotEnvProvider) Name() string {
 }
 
 // Fetch fetches secrets from a .env file
-func (p *DotEnvProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *DotEnvProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}) ([]provider.KeyValue, error) {
 	// Extract path from config
 	path, ok := config["path"].(string)
 	if !ok || path == "" {
@@ -40,32 +40,13 @@ func (p *DotEnvProvider) Fetch(ctx context.Context, mapID string, config map[str
 		return nil, fmt.Errorf("failed to read .env file at '%s': %w", expandedPath, err)
 	}
 
-	// If no keys specified, return all
-	if len(keys) == 0 {
-		kvs := make([]provider.KeyValue, 0, len(envMap))
-		for k, v := range envMap {
-			kvs = append(kvs, provider.KeyValue{
-				Key:   k,
-				Value: v,
-			})
-		}
-		return kvs, nil
-	}
-
-	// Map keys according to configuration
-	kvs := make([]provider.KeyValue, 0)
-	for envKey, targetKey := range keys {
-		if value, exists := envMap[envKey]; exists {
-			if targetKey == "==" {
-				targetKey = envKey // Keep same name
-			}
-			kvs = append(kvs, provider.KeyValue{
-				Key:   targetKey,
-				Value: value,
-			})
-		}
+	kvs := make([]provider.KeyValue, 0, len(envMap))
+	for k, v := range envMap {
+		kvs = append(kvs, provider.KeyValue{
+			Key:   k,
+			Value: v,
+		})
 	}
 
 	return kvs, nil
 }
-

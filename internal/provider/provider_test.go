@@ -11,4 +11,3 @@ func TestProviderInterface(t *testing.T) {
 		t.Error("registry should not be nil")
 	}
 }
-

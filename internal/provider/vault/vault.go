@@ -40,7 +40,7 @@ func (p *VaultProvider) Name() string {
 }
 
 // Fetch fetches secrets from HashiCorp Vault
-func (p *VaultProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *VaultProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}) ([]provider.KeyValue, error) {
 	// Convert map to strongly typed config struct
 	cfg, err := parseConfig(config)
 	if err != nil {
@@ -102,23 +102,6 @@ func (p *VaultProvider) Fetch(ctx context.Context, mapID string, config map[stri
 	// Map keys according to configuration
 	kvs := make([]provider.KeyValue, 0)
 	for k, v := range secretData {
-		targetKey := k
-
-		// Check if there's a specific mapping
-		if mappedKey, exists := keys[k]; exists {
-			if mappedKey == "==" {
-				targetKey = k // Keep same name
-			} else {
-				targetKey = mappedKey
-			}
-		} else if len(keys) == 0 {
-			// No keys specified means map everything
-			targetKey = k
-		} else {
-			// Skip keys not in the mapping
-			continue
-		}
-
 		// Convert value to string
 		var value string
 		switch val := v.(type) {
@@ -136,7 +119,7 @@ func (p *VaultProvider) Fetch(ctx context.Context, mapID string, config map[stri
 		}
 
 		kvs = append(kvs, provider.KeyValue{
-			Key:   targetKey,
+			Key:   k,
 			Value: value,
 		})
 	}

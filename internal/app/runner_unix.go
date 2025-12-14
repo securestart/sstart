@@ -21,4 +21,3 @@ func registerSignals(sigChan chan os.Signal) {
 	// Register for interrupt and terminate signals
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 }
-

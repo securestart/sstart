@@ -157,7 +157,7 @@ func TestVaultProvider_Fetch_ConfigValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			_, err := provider.Fetch(ctx, "test-map", tt.config, nil)
+			_, err := provider.Fetch(ctx, "test-map", tt.config)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("VaultProvider.Fetch() error = %v, wantErr %v", err, tt.wantErr)
@@ -274,4 +274,3 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
-

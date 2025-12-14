@@ -67,7 +67,7 @@ providers:
     ref: %s
 `, onePasswordRef)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -137,7 +137,7 @@ providers:
     ref: %s
 `, onePasswordRef)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -211,7 +211,7 @@ providers:
     ref: %s
 `, onePasswordRef)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -292,7 +292,7 @@ providers:
     ref: %s
 `, onePasswordRef)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -392,7 +392,7 @@ providers:
     use_section_prefix: true
 `, onePasswordRef)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -487,7 +487,7 @@ providers:
     use_section_prefix: false
 `, onePasswordRef)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -555,7 +555,7 @@ providers:
     use_section_prefix: false
 `, onePasswordRef)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -646,7 +646,7 @@ providers:
     use_section_prefix: false
 `, onePasswordRef)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 

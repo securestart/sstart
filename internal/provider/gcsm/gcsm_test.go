@@ -73,7 +73,8 @@ func TestParseConfig(t *testing.T) {
 				"project_id": "",
 				"secret_id":  "my-secret",
 			},
-			wantErr: false, // parseConfig doesn't validate, Fetch does
+			wantSecretID: "my-secret",
+			wantErr:      false, // parseConfig doesn't validate, Fetch does
 		},
 		{
 			name: "config with missing project_id field",
@@ -161,7 +162,7 @@ func TestGCSMProvider_Fetch_ConfigValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			_, err := provider.Fetch(ctx, "test-map", tt.config, nil)
+			_, err := provider.Fetch(ctx, "test-map", tt.config)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GCSMProvider.Fetch() error = %v, wantErr %v", err, tt.wantErr)
@@ -279,4 +280,3 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
-

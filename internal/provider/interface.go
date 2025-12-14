@@ -19,7 +19,7 @@ type Provider interface {
 
 	// Fetch fetches secrets from the provider based on the configuration
 	// config contains provider-specific configuration fields (e.g., path, region, endpoint, etc.)
-	Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]KeyValue, error)
+	Fetch(ctx context.Context, mapID string, config map[string]interface{}) ([]KeyValue, error)
 }
 
 // Registry holds all registered providers
@@ -47,4 +47,3 @@ func List() []string {
 	}
 	return kinds
 }
-

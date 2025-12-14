@@ -68,7 +68,7 @@ providers:
       %s: ==
 `, projectID, environment, secretPath, secretKey1, secretKey1, secretKey2, secretKey2, secretKey3)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -156,7 +156,7 @@ providers:
     path: %s
 `, projectID, environment, secretPath)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -238,7 +238,7 @@ providers:
     expand_secrets: false
 `, projectID, environment, secretPath)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 

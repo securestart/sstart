@@ -52,7 +52,7 @@ providers:
       JWT_SECRET: JWT_SECRET
 `, secretName, localstack.Endpoint)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -79,7 +79,7 @@ echo "SUCCESS: All JSON secrets parsed correctly"
 exit 0
 `
 
-	if err := os.WriteFile(testScript, []byte(scriptContent), 0755); err != nil {
+	if err := os.WriteFile(testScript, []byte(scriptContent), 0o755); err != nil {
 		t.Fatalf("Failed to write test script: %v", err)
 	}
 
@@ -158,7 +158,7 @@ providers:
       KEY2_ONLY: KEY2_ONLY
 `, secretName1, localstack.Endpoint, secretName2, localstack.Endpoint)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -187,7 +187,7 @@ echo "SUCCESS: Multiple secrets override correctly"
 exit 0
 `
 
-	if err := os.WriteFile(testScript, []byte(scriptContent), 0755); err != nil {
+	if err := os.WriteFile(testScript, []byte(scriptContent), 0o755); err != nil {
 		t.Fatalf("Failed to write test script: %v", err)
 	}
 
@@ -263,7 +263,7 @@ providers:
     endpoint: %s
 `, secretName, localstack.Endpoint)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -280,7 +280,7 @@ echo "SUCCESS: Non-JSON secret loaded correctly to AWS_NON_JSON_SECRET"
 exit 0
 `
 
-	if err := os.WriteFile(testScript, []byte(scriptContent), 0755); err != nil {
+	if err := os.WriteFile(testScript, []byte(scriptContent), 0o755); err != nil {
 		t.Fatalf("Failed to write test script: %v", err)
 	}
 
@@ -387,7 +387,7 @@ providers:
     endpoint: %s
 `, jsonSecretName, localstack.Endpoint, nonJSONSecretName, localstack.Endpoint)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -415,7 +415,7 @@ echo "SUCCESS: Mixed JSON and non-JSON secrets handled correctly"
 exit 0
 `
 
-	if err := os.WriteFile(testScript, []byte(scriptContent), 0755); err != nil {
+	if err := os.WriteFile(testScript, []byte(scriptContent), 0o755); err != nil {
 		t.Fatalf("Failed to write test script: %v", err)
 	}
 

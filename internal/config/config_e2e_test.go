@@ -154,7 +154,7 @@ providers:
 			// Create temporary YAML file
 			tmpDir := t.TempDir()
 			yamlFile := filepath.Join(tmpDir, "test.yml")
-			if err := os.WriteFile(yamlFile, []byte(tt.yamlContent), 0644); err != nil {
+			if err := os.WriteFile(yamlFile, []byte(tt.yamlContent), 0o644); err != nil {
 				t.Fatalf("Failed to create test YAML file: %v", err)
 			}
 
@@ -286,7 +286,7 @@ providers:
 			// Create temporary YAML file
 			tmpDir := t.TempDir()
 			yamlFile := filepath.Join(tmpDir, "test.yml")
-			if err := os.WriteFile(yamlFile, []byte(tt.yamlContent), 0644); err != nil {
+			if err := os.WriteFile(yamlFile, []byte(tt.yamlContent), 0o644); err != nil {
 				t.Fatalf("Failed to create test YAML file: %v", err)
 			}
 
@@ -336,7 +336,7 @@ providers:
 
 	tmpDir := t.TempDir()
 	yamlFile := filepath.Join(tmpDir, "test.yml")
-	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
+	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0o644); err != nil {
 		t.Fatalf("Failed to create test YAML file: %v", err)
 	}
 
@@ -416,7 +416,7 @@ providers:
 
 	tmpDir := t.TempDir()
 	yamlFile := filepath.Join(tmpDir, "test.yml")
-	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
+	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0o644); err != nil {
 		t.Fatalf("Failed to create test YAML file: %v", err)
 	}
 
@@ -473,7 +473,7 @@ providers:
 
 	tmpDir := t.TempDir()
 	yamlFile := filepath.Join(tmpDir, "test.yml")
-	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0644); err != nil {
+	if err := os.WriteFile(yamlFile, []byte(yamlContent), 0o644); err != nil {
 		t.Fatalf("Failed to create test YAML file: %v", err)
 	}
 
@@ -614,7 +614,7 @@ providers:
 			// Create temporary YAML file
 			tmpDir := t.TempDir()
 			yamlFile := filepath.Join(tmpDir, "test.yml")
-			if err := os.WriteFile(yamlFile, []byte(tt.yamlContent), 0644); err != nil {
+			if err := os.WriteFile(yamlFile, []byte(tt.yamlContent), 0o644); err != nil {
 				t.Fatalf("Failed to create test YAML file: %v", err)
 			}
 
@@ -643,7 +643,7 @@ providers:
 
 			// Try to Fetch (will fail for missing connections/credentials, but config parsing should work)
 			ctx := context.Background()
-			_, err = prov.Fetch(ctx, providerCfg.ID, providerCfg.Config, providerCfg.Keys)
+			_, err = prov.Fetch(ctx, providerCfg.ID, providerCfg.Config)
 
 			if (err != nil) != tt.expectParseErr {
 				t.Errorf("Expected parse error: %v, got error: %v", tt.expectParseErr, err)

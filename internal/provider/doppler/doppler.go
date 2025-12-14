@@ -58,7 +58,7 @@ func (p *DopplerProvider) Name() string {
 }
 
 // Fetch fetches secrets from Doppler
-func (p *DopplerProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *DopplerProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}) ([]provider.KeyValue, error) {
 	// Parse and validate configuration
 	cfg, err := validateConfig(config)
 	if err != nil {
@@ -122,26 +122,9 @@ func (p *DopplerProvider) Fetch(ctx context.Context, mapID string, config map[st
 	// Use computed value as it resolves secret references (e.g., ${USER})
 	kvs := make([]provider.KeyValue, 0)
 	for secretName, secretInfo := range response.Secrets {
-		targetKey := secretName
-
-		// Check if there's a specific mapping
-		if mappedKey, exists := keys[secretName]; exists {
-			if mappedKey == "==" {
-				targetKey = secretName // Keep same name
-			} else {
-				targetKey = mappedKey
-			}
-		} else if len(keys) == 0 {
-			// No keys specified means map everything
-			targetKey = secretName
-		} else {
-			// Skip keys not in the mapping
-			continue
-		}
-
 		// Use computed value (resolves references like ${USER})
 		kvs = append(kvs, provider.KeyValue{
-			Key:   targetKey,
+			Key:   secretName,
 			Value: secretInfo.Computed,
 		})
 	}

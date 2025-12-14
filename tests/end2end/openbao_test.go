@@ -51,7 +51,7 @@ providers:
       OPENBAO_CONFIG: ==
 `, openbaoPath, openbaoContainer.Address)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -132,7 +132,7 @@ providers:
     mount: secret
 `, openbaoPath, openbaoContainer.Address)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -177,4 +177,3 @@ providers:
 
 	t.Logf("Successfully collected %d secrets from OpenBao provider without key mappings", len(collectedSecrets))
 }
-

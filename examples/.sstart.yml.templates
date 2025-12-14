@@ -1,0 +1,15 @@
+# Templates Usage Example
+# This demonstrates using templates: It allows you to build a secret as a
+# composite of multiple secrets from the source provider
+
+inherit: false
+
+providers:
+  - kind: dotenv
+    path: .env.templates
+    keys:
+      API_KEY: API_SECRET_KEY
+      APP_NAME: ==
+    templates: # Use classic Go text/template syntax
+      PG_DSN: |
+        postgresql://{{ .Env.PG_USER }}:{{ .Env.PG_PASS }}@{{ .Env.PG_HOST }}:5432/{{ .Env.PG_DATABASE }}

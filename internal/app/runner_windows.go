@@ -18,4 +18,3 @@ func registerSignals(sigChan chan os.Signal) {
 	// On Windows, only os.Interrupt (Ctrl+C) is available
 	signal.Notify(sigChan, os.Interrupt)
 }
-

@@ -79,7 +79,7 @@ providers:
       VAULT_CONFIG: ==
 `, secretName, localstack.Endpoint, vaultPath, vaultContainer.Address)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -191,7 +191,7 @@ providers:
     mount: secret
 `, secretName, localstack.Endpoint, vaultPath, vaultContainer.Address)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -309,7 +309,7 @@ providers:
       foo: FOO
 `, secretName, localstack.Endpoint, vaultPath, vaultContainer.Address, projectID, gcsmSecretID)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 

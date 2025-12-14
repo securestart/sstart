@@ -96,7 +96,7 @@ func (p *BitwardenProvider) Name() string {
 }
 
 // Fetch fetches secrets from personal Bitwarden vault using REST API
-func (p *BitwardenProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *BitwardenProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}) ([]provider.KeyValue, error) {
 	// Convert map to strongly typed config struct
 	cfg, err := parseConfig(config)
 	if err != nil {
@@ -218,7 +218,7 @@ func (p *BitwardenProvider) Fetch(ctx context.Context, mapID string, config map[
 	case "both":
 		// Parse both notes and fields, with fields taking precedence
 		secretData = make(map[string]interface{})
-		
+
 		// First, parse notes as JSON (if available)
 		if item.Notes != "" {
 			var noteData map[string]interface{}
@@ -229,14 +229,14 @@ func (p *BitwardenProvider) Fetch(ctx context.Context, mapID string, config map[
 				}
 			}
 		}
-		
+
 		// Then, add fields (which will override any duplicate keys from notes)
 		for _, field := range item.Fields {
 			if field.Type == 0 || field.Type == 1 { // Text or Hidden
 				secretData[field.Name] = field.Value
 			}
 		}
-		
+
 		// Also include login credentials if available
 		if item.Login != nil {
 			if item.Login.Username != "" {
@@ -246,7 +246,7 @@ func (p *BitwardenProvider) Fetch(ctx context.Context, mapID string, config map[
 				secretData["password"] = item.Login.Password
 			}
 		}
-		
+
 		if len(secretData) == 0 {
 			return nil, fmt.Errorf("bitwarden item '%s' has no fields or notes for 'both' format", cfg.ItemID)
 		}
@@ -283,26 +283,9 @@ func (p *BitwardenProvider) Fetch(ctx context.Context, mapID string, config map[
 	// Map keys according to configuration
 	kvs := make([]provider.KeyValue, 0)
 	for k, v := range secretData {
-		targetKey := k
-
-		// Check if there's a specific mapping
-		if mappedKey, exists := keys[k]; exists {
-			if mappedKey == "==" {
-				targetKey = k // Keep same name
-			} else {
-				targetKey = mappedKey
-			}
-		} else if len(keys) == 0 {
-			// No keys specified means map everything
-			targetKey = k
-		} else {
-			// Skip keys not in the mapping
-			continue
-		}
-
 		value := fmt.Sprintf("%v", v)
 		kvs = append(kvs, provider.KeyValue{
-			Key:   targetKey,
+			Key:   k,
 			Value: value,
 		})
 	}

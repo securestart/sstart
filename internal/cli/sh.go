@@ -26,4 +26,3 @@ Example:
 func init() {
 	rootCmd.AddCommand(shCmd)
 }
-

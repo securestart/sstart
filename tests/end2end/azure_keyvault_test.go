@@ -49,7 +49,7 @@ providers:
       JWT_SECRET: ==
 `, akvContainer.VaultURL, secretName)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -128,7 +128,7 @@ providers:
     secret_name: %s
 `, akvContainer.VaultURL, secretName)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 

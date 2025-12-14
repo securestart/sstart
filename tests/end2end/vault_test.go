@@ -51,7 +51,7 @@ providers:
       VAULT_CONFIG: ==
 `, vaultPath, vaultContainer.Address)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -132,7 +132,7 @@ providers:
     mount: secret
 `, vaultPath, vaultContainer.Address)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 

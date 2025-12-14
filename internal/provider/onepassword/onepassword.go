@@ -44,7 +44,7 @@ func (p *OnePasswordProvider) Name() string {
 }
 
 // Fetch fetches secrets from 1Password
-func (p *OnePasswordProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *OnePasswordProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}) ([]provider.KeyValue, error) {
 	// Convert map to strongly typed config struct
 	cfg, err := parseConfig(config)
 	if err != nil {
@@ -97,13 +97,20 @@ func (p *OnePasswordProvider) Fetch(ctx context.Context, mapID string, config ma
 		// Fetching the whole item
 		secretData, err = p.extractWholeItem(item, cfg, parsedRef)
 	}
-
 	if err != nil {
 		return nil, err
 	}
 
-	// Map keys according to configuration
-	return mapSecretKeys(secretData, keys), nil
+	kvs := make([]provider.KeyValue, 0)
+	for k, v := range secretData {
+		value := fmt.Sprintf("%v", v)
+		kvs = append(kvs, provider.KeyValue{
+			Key:   k,
+			Value: value,
+		})
+	}
+
+	return kvs, nil
 }
 
 // resolveAmbiguousRef resolves ambiguous references where part3 could be a field or section
@@ -375,36 +382,6 @@ func (p *OnePasswordProvider) processSectionFields(
 		}
 	}
 	return nil
-}
-
-// mapSecretKeys maps secret data keys according to the provided key mapping
-func mapSecretKeys(secretData map[string]interface{}, keys map[string]string) []provider.KeyValue {
-	kvs := make([]provider.KeyValue, 0)
-	for k, v := range secretData {
-		targetKey := k
-
-		// Check if there's a specific mapping
-		if mappedKey, exists := keys[k]; exists {
-			if mappedKey == "==" {
-				targetKey = k // Keep same name
-			} else {
-				targetKey = mappedKey
-			}
-		} else if len(keys) == 0 {
-			// No keys specified means map everything
-			targetKey = k
-		} else {
-			// Skip keys not in the mapping
-			continue
-		}
-
-		value := fmt.Sprintf("%v", v)
-		kvs = append(kvs, provider.KeyValue{
-			Key:   targetKey,
-			Value: value,
-		})
-	}
-	return kvs
 }
 
 // parsedRef represents a parsed 1Password reference

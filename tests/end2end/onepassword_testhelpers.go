@@ -73,9 +73,9 @@ func SetupOnePasswordItem(ctx context.Context, t *testing.T, client *onepassword
 	// Add top-level fields (not in sections)
 	for fieldTitle, fieldValue := range fields {
 		itemFields = append(itemFields, onepassword.ItemField{
-			ID:       generateUniqueID(),
-			Title:    fieldTitle,
-			Value:    fieldValue,
+			ID:        generateUniqueID(),
+			Title:     fieldTitle,
+			Value:     fieldValue,
 			FieldType: onepassword.ItemFieldTypeText,
 		})
 	}
@@ -165,4 +165,3 @@ func GetOnePasswordItemByTitle(ctx context.Context, t *testing.T, client *onepas
 
 	return &item
 }
-

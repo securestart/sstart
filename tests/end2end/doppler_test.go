@@ -65,7 +65,7 @@ providers:
       %s: ==
 `, project, dopplerConfig, secretKey1, secretKey1, secretKey2, secretKey2, secretKey3)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -153,7 +153,7 @@ providers:
     config: %s
 `, project, dopplerConfig)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 

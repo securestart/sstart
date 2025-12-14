@@ -93,7 +93,7 @@ providers:
       RUN_VAULT_KEY: RUN_VAULT_KEY
 `, secretName, localstack.Endpoint, vaultPath, vaultContainer.Address)
 
-		if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+		if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 			t.Fatalf("Failed to write config file: %v", err)
 		}
 
@@ -129,7 +129,7 @@ fi
 echo "SUCCESS: All secrets accessible and system env inherited"
 exit 0
 `
-		if err := os.WriteFile(testScript, []byte(scriptContent), 0755); err != nil {
+		if err := os.WriteFile(testScript, []byte(scriptContent), 0o755); err != nil {
 			t.Fatalf("Failed to write test script: %v", err)
 		}
 
@@ -180,7 +180,7 @@ providers:
       RUN_VAULT_KEY: RUN_VAULT_KEY
 `, secretName, localstack.Endpoint, vaultPath, vaultContainer.Address)
 
-		if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+		if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 			t.Fatalf("Failed to write config file: %v", err)
 		}
 
@@ -216,7 +216,7 @@ fi
 echo "SUCCESS: All secrets accessible and system env NOT inherited"
 exit 0
 `
-		if err := os.WriteFile(testScript, []byte(scriptContent), 0755); err != nil {
+		if err := os.WriteFile(testScript, []byte(scriptContent), 0o755); err != nil {
 			t.Fatalf("Failed to write test script: %v", err)
 		}
 
@@ -284,7 +284,7 @@ providers:
       SIGNAL_TEST_KEY: SIGNAL_TEST_KEY
 `, secretName, localstack.Endpoint)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -312,7 +312,7 @@ while true; do
 done
 `, absSignalFile)
 
-	if err := os.WriteFile(testScript, []byte(scriptContent), 0755); err != nil {
+	if err := os.WriteFile(testScript, []byte(scriptContent), 0o755); err != nil {
 		t.Fatalf("Failed to write test script: %v", err)
 	}
 

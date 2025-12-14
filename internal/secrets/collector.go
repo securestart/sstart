@@ -1,11 +1,13 @@
 package secrets
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
+	"text/template"
 
 	"github.com/dirathea/sstart/internal/config"
 	"github.com/dirathea/sstart/internal/provider"
@@ -49,18 +51,86 @@ func (c *Collector) Collect(ctx context.Context, providerIDs []string) (map[stri
 		expandedConfig := expandConfigTemplates(providerCfg.Config)
 
 		// Fetch secrets from this provider's single source
-		kvs, err := prov.Fetch(ctx, providerCfg.ID, expandedConfig, providerCfg.Keys)
+		kvs, err := prov.Fetch(ctx, providerCfg.ID, expandedConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch from provider '%s': %w", providerID, err)
 		}
 
+		tmplKvs, err := execTemplates(kvs, providerCfg.Templates)
+		if err != nil {
+			return nil, err
+		}
+
+		mappingKvs := mapSecretKeys(kvs, providerCfg.Keys)
+
 		// Merge secrets (later providers override earlier ones)
-		for _, kv := range kvs {
+		for _, kv := range append(mappingKvs, tmplKvs...) {
 			secrets[kv.Key] = kv.Value
 		}
 	}
 
 	return secrets, nil
+}
+
+// execTemplates returns extra slice of KeyValue slice for given templates.
+func execTemplates(in []provider.KeyValue, tmpls []*template.Template) ([]provider.KeyValue, error) {
+	if tmpls == nil {
+		return []provider.KeyValue{}, nil
+	}
+	out := make([]provider.KeyValue, 0)
+	for _, tmpl := range tmpls {
+		var buf bytes.Buffer
+		type tmplData struct {
+			Env map[string]string
+		}
+		values := make(map[string]string, len(out))
+		for _, kv := range in {
+			values[kv.Key] = kv.Value
+		}
+		if err := tmpl.Execute(&buf, tmplData{Env: values}); err != nil {
+			return nil, fmt.Errorf("failed to execute template: %w", err)
+		}
+		envKey := tmpl.Name()
+		v := strings.TrimRight(buf.String(), "\n")
+		out = append(out, provider.KeyValue{
+			Key:   envKey,
+			Value: v,
+		})
+	}
+	return out, nil
+}
+
+// mapSecretKeys maps secret data keys according to the provided key mapping
+func mapSecretKeys(in []provider.KeyValue, keys map[string]string) []provider.KeyValue {
+	if keys == nil {
+		return in
+	}
+	// Map keys according to configuration
+	out := make([]provider.KeyValue, 0)
+	for _, x := range in {
+		k, v := x.Key, x.Value
+		targetKey := k
+
+		// Check if there's a specific mapping
+		if mappedKey, exists := keys[k]; exists {
+			if mappedKey == "==" {
+				targetKey = k // Keep same name
+			} else {
+				targetKey = mappedKey
+			}
+		} else if len(keys) == 0 {
+			// No keys specified means map everything
+			targetKey = k
+		} else {
+			// Skip keys not in the mapping
+			continue
+		}
+		out = append(out, provider.KeyValue{
+			Key:   targetKey,
+			Value: v,
+		})
+	}
+	return out
 }
 
 // expandConfigTemplates expands template variables in config values

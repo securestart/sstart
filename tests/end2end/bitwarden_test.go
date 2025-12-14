@@ -51,7 +51,7 @@ providers:
       DB_PASSWORD: BITWARDEN_DB_PASSWORD
 `, itemID)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -127,7 +127,7 @@ providers:
     format: note
 `, itemID)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -196,7 +196,7 @@ func TestE2E_Bitwarden_CLI_BothFormat(t *testing.T) {
 	fields := map[string]string{
 		"API_KEY":     "test-field-api-key-override",
 		"DB_PASSWORD": "test-field-db-password-override",
-		"FIELD_ONLY":   "field-only-value",
+		"FIELD_ONLY":  "field-only-value",
 	}
 	itemID := SetupBitwardenItem(ctx, t, "sstart-test-both", 2, noteContent, fields, "", "")
 
@@ -212,7 +212,7 @@ providers:
     format: both
 `, itemID)
 
-	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configYAML), 0o644); err != nil {
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
@@ -234,10 +234,10 @@ providers:
 	// Verify we got the expected secrets
 	// Fields should take precedence over notes for duplicate keys
 	expectedSecrets := map[string]string{
-		"API_KEY":     "test-field-api-key-override",    // From fields (overrides note)
+		"API_KEY":     "test-field-api-key-override",     // From fields (overrides note)
 		"DB_PASSWORD": "test-field-db-password-override", // From fields (overrides note)
 		"JWT_SECRET":  "test-note-jwt-token",             // From notes (no field override)
-		"FIELD_ONLY":  "field-only-value",               // From fields only
+		"FIELD_ONLY":  "field-only-value",                // From fields only
 	}
 
 	for key, expectedValue := range expectedSecrets {

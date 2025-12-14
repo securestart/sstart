@@ -42,7 +42,7 @@ func (p *SecretsManagerProvider) Name() string {
 }
 
 // Fetch fetches secrets from AWS Secrets Manager
-func (p *SecretsManagerProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *SecretsManagerProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}) ([]provider.KeyValue, error) {
 	// Convert map to strongly typed config struct
 	cfg, err := parseConfig(config)
 	if err != nil {
@@ -87,26 +87,9 @@ func (p *SecretsManagerProvider) Fetch(ctx context.Context, mapID string, config
 	// Map keys according to configuration
 	kvs := make([]provider.KeyValue, 0)
 	for k, v := range secretData {
-		targetKey := k
-
-		// Check if there's a specific mapping
-		if mappedKey, exists := keys[k]; exists {
-			if mappedKey == "==" {
-				targetKey = k // Keep same name
-			} else {
-				targetKey = mappedKey
-			}
-		} else if len(keys) == 0 {
-			// No keys specified means map everything
-			targetKey = k
-		} else {
-			// Skip keys not in the mapping
-			continue
-		}
-
 		value := fmt.Sprintf("%v", v)
 		kvs = append(kvs, provider.KeyValue{
-			Key:   targetKey,
+			Key:   k,
 			Value: value,
 		})
 	}

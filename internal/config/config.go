@@ -3,13 +3,14 @@ package config
 import (
 	"fmt"
 	"os"
+	"text/template"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Config represents the main configuration structure
 type Config struct {
-	Inherit   bool             `yaml:"inherit"`   // Whether to inherit system environment variables (default: true)
+	Inherit   bool             `yaml:"inherit"` // Whether to inherit system environment variables (default: true)
 	Providers []ProviderConfig `yaml:"providers"`
 }
 
@@ -17,11 +18,12 @@ type Config struct {
 // Each provider loads from a single source. To load multiple secrets from the same provider type,
 // configure multiple provider instances with the same 'kind' but different 'id' values.
 type ProviderConfig struct {
-	Kind   string                 `yaml:"kind"`
-	ID     string                 `yaml:"id,omitempty"`   // Optional: defaults to 'kind'. Required if multiple providers share the same kind
-	Config map[string]interface{} `yaml:"-"`              // Provider-specific configuration (e.g., path, region, endpoint, etc.)
-	Keys   map[string]string      `yaml:"keys,omitempty"` // Optional key mappings (source_key: target_key, or "==" to keep same name)
-	Env    EnvVars                `yaml:"env,omitempty"`
+	Kind      string                 `yaml:"kind"`
+	ID        string                 `yaml:"id,omitempty"`        // Optional: defaults to 'kind'. Required if multiple providers share the same kind
+	Config    map[string]interface{} `yaml:"-"`                   // Provider-specific configuration (e.g., path, region, endpoint, etc.)
+	Keys      map[string]string      `yaml:"keys,omitempty"`      // Optional key mappings (source_key: target_key, or "==" to keep same name)
+	Templates []*template.Template   `yaml:"templates,omitempty"` // Optional templates mappings (target_key: str(Go template))
+	Env       EnvVars                `yaml:"env,omitempty"`
 }
 
 // UnmarshalYAML implements custom YAML unmarshaling to capture provider-specific fields
@@ -51,6 +53,21 @@ func (p *ProviderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 			}
 		}
 		delete(raw, "keys")
+	}
+
+	if templates, ok := raw["templates"].(map[string]interface{}); ok {
+		for k, v := range templates {
+			str, ok := v.(string)
+			if !ok {
+				return fmt.Errorf("invalid template format")
+			}
+			tmpl := template.New(k)
+			if _, err := tmpl.Parse(str); err != nil {
+				return err
+			}
+			p.Templates = append(p.Templates, tmpl)
+		}
+		delete(raw, "templates")
 	}
 
 	if env, ok := raw["env"].(map[string]interface{}); ok {
