@@ -394,3 +394,137 @@ done
 
 	t.Logf("Successfully tested signal handling - signal was forwarded to subprocess")
 }
+
+// TestE2E_RunCommand_ExitCode tests that subprocess exit codes are properly propagated
+func TestE2E_RunCommand_ExitCode(t *testing.T) {
+	ctx := context.Background()
+
+	// Setup LocalStack container
+	localstack := SetupLocalStack(ctx, t)
+	defer func() {
+		if err := localstack.Cleanup(); err != nil {
+			t.Errorf("Failed to terminate localstack container: %v", err)
+		}
+	}()
+
+	time.Sleep(2 * time.Second)
+
+	// Set up AWS secret (minimal setup for exit code test)
+	secretName := "test/exitcode/secrets"
+	secretData := map[string]string{
+		"EXITCODE_TEST_KEY": "exitcode-test-value",
+	}
+	SetupAWSSecret(ctx, t, localstack, secretName, secretData)
+
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, ".sstart.yml")
+
+	configYAML := fmt.Sprintf(`
+inherit: true
+providers:
+  - kind: aws_secretsmanager
+    id: aws-exitcode
+    secret_id: %s
+    region: us-east-1
+    endpoint: %s
+    keys:
+      EXITCODE_TEST_KEY: EXITCODE_TEST_KEY
+`, secretName, localstack.Endpoint)
+
+	if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
+
+	// Build sstart binary
+	sstartBinary := filepath.Join(tmpDir, "sstart")
+	projectRoot := getProjectRoot(t)
+	cmdPath := filepath.Join(projectRoot, "cmd", "sstart")
+	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", sstartBinary, cmdPath)
+	buildCmd.Dir = projectRoot
+	if err := buildCmd.Run(); err != nil {
+		t.Fatalf("Failed to build sstart binary: %v", err)
+	}
+
+	// Test cases: exit code -> expected exit code
+	testCases := []struct {
+		name         string
+		exitCode     int
+		expectedExit int
+		description  string
+	}{
+		{
+			name:         "exit_code_0",
+			exitCode:     0,
+			expectedExit: 0,
+			description:  "Subprocess exits with code 0 (success)",
+		},
+		{
+			name:         "exit_code_1",
+			exitCode:     1,
+			expectedExit: 1,
+			description:  "Subprocess exits with code 1 (common error)",
+		},
+		{
+			name:         "exit_code_42",
+			exitCode:     42,
+			expectedExit: 42,
+			description:  "Subprocess exits with code 42 (arbitrary non-zero)",
+		},
+		{
+			name:         "exit_code_127",
+			exitCode:     127,
+			expectedExit: 127,
+			description:  "Subprocess exits with code 127 (command not found)",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a test script that exits with the specified code
+			testScript := filepath.Join(tmpDir, fmt.Sprintf("exitcode_test_%d.sh", tc.exitCode))
+			scriptContent := fmt.Sprintf(`#!/bin/sh
+# Verify secret is accessible
+if [ "$EXITCODE_TEST_KEY" != "exitcode-test-value" ]; then
+  echo "ERROR: EXITCODE_TEST_KEY not accessible"
+  exit 1
+fi
+
+# Exit with the specified code
+exit %d
+`, tc.exitCode)
+
+			if err := os.WriteFile(testScript, []byte(scriptContent), 0755); err != nil {
+				t.Fatalf("Failed to write test script: %v", err)
+			}
+
+			// Run sstart with the test script
+			runCmd := exec.CommandContext(ctx, sstartBinary, "--config", configFile, "run", "--", testScript)
+			runCmd.Dir = tmpDir
+
+			err := runCmd.Run()
+
+			// Check the exit code
+			if err != nil {
+				if exitError, ok := err.(*exec.ExitError); ok {
+					actualExitCode := exitError.ExitCode()
+					if actualExitCode != tc.expectedExit {
+						t.Errorf("%s: Expected exit code %d, got %d", tc.description, tc.expectedExit, actualExitCode)
+					} else {
+						t.Logf("%s: Correctly propagated exit code %d", tc.description, actualExitCode)
+					}
+				} else {
+					t.Errorf("%s: Process exited with non-ExitError: %v", tc.description, err)
+				}
+			} else {
+				// No error means exit code 0
+				if tc.expectedExit != 0 {
+					t.Errorf("%s: Expected exit code %d, but process exited with code 0", tc.description, tc.expectedExit)
+				} else {
+					t.Logf("%s: Correctly propagated exit code 0", tc.description)
+				}
+			}
+		})
+	}
+
+	t.Logf("Successfully tested exit code propagation")
+}
