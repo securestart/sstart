@@ -5,6 +5,180 @@ import (
 	"testing"
 )
 
+func TestParseConfigWithAuthOptions(t *testing.T) {
+	tests := []struct {
+		name          string
+		config        map[string]interface{}
+		wantAuth      string
+		wantAuthMount string
+		wantRole      string
+		wantErr       bool
+	}{
+		{
+			name: "config with token auth (default)",
+			config: map[string]interface{}{
+				"path": "myapp/secret",
+			},
+			wantAuth:      "",
+			wantAuthMount: "",
+			wantRole:      "",
+			wantErr:       false,
+		},
+		{
+			name: "config with explicit token auth",
+			config: map[string]interface{}{
+				"path": "myapp/secret",
+				"auth": "token",
+			},
+			wantAuth:      "token",
+			wantAuthMount: "",
+			wantRole:      "",
+			wantErr:       false,
+		},
+		{
+			name: "config with oidc auth",
+			config: map[string]interface{}{
+				"path": "myapp/secret",
+				"auth": "oidc",
+				"role": "my-role",
+			},
+			wantAuth:      "oidc",
+			wantAuthMount: "",
+			wantRole:      "my-role",
+			wantErr:       false,
+		},
+		{
+			name: "config with jwt auth and custom mount",
+			config: map[string]interface{}{
+				"path":      "myapp/secret",
+				"auth":      "jwt",
+				"authMount": "custom-jwt",
+				"role":      "app-role",
+			},
+			wantAuth:      "jwt",
+			wantAuthMount: "custom-jwt",
+			wantRole:      "app-role",
+			wantErr:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := parseConfig(tt.config)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err != nil {
+				return
+			}
+
+			if cfg.Auth != tt.wantAuth {
+				t.Errorf("parseConfig() Auth = %v, want %v", cfg.Auth, tt.wantAuth)
+			}
+			if cfg.AuthMount != tt.wantAuthMount {
+				t.Errorf("parseConfig() AuthMount = %v, want %v", cfg.AuthMount, tt.wantAuthMount)
+			}
+			if cfg.Role != tt.wantRole {
+				t.Errorf("parseConfig() Role = %v, want %v", cfg.Role, tt.wantRole)
+			}
+		})
+	}
+}
+
+func TestParseConfigWithSSOTokens(t *testing.T) {
+	config := map[string]interface{}{
+		"path":              "myapp/secret",
+		"auth":              "oidc",
+		"role":              "my-role",
+		"_sso_access_token": "test-access-token-123",
+		"_sso_id_token":     "test-id-token-456",
+	}
+
+	cfg, err := parseConfig(config)
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+
+	if cfg.SSOAccessToken != "test-access-token-123" {
+		t.Errorf("parseConfig() SSOAccessToken = %v, want %v", cfg.SSOAccessToken, "test-access-token-123")
+	}
+	if cfg.SSOIDToken != "test-id-token-456" {
+		t.Errorf("parseConfig() SSOIDToken = %v, want %v", cfg.SSOIDToken, "test-id-token-456")
+	}
+}
+
+func TestVaultProvider_Fetch_OIDCAuthValidation(t *testing.T) {
+	provider := &VaultProvider{}
+
+	tests := []struct {
+		name    string
+		config  map[string]interface{}
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "oidc auth without role",
+			config: map[string]interface{}{
+				"path":              "myapp/secret",
+				"auth":              "oidc",
+				"_sso_access_token": "test-token",
+			},
+			wantErr: true,
+			errMsg:  "requires 'role' field",
+		},
+		{
+			name: "oidc auth without SSO token",
+			config: map[string]interface{}{
+				"path": "myapp/secret",
+				"auth": "oidc",
+				"role": "my-role",
+			},
+			wantErr: true,
+			errMsg:  "no SSO token available",
+		},
+		{
+			name: "jwt auth without role",
+			config: map[string]interface{}{
+				"path":          "myapp/secret",
+				"auth":          "jwt",
+				"_sso_id_token": "test-token",
+			},
+			wantErr: true,
+			errMsg:  "requires 'role' field",
+		},
+		{
+			name: "unsupported auth method",
+			config: map[string]interface{}{
+				"path": "myapp/secret",
+				"auth": "invalid-method",
+			},
+			wantErr: true,
+			errMsg:  "unsupported auth method",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			_, err := provider.Fetch(ctx, "test-map", tt.config, nil)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("VaultProvider.Fetch() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr && err != nil {
+				if tt.errMsg != "" && err.Error() != "" {
+					if !containsSubstring(err.Error(), tt.errMsg) {
+						t.Errorf("VaultProvider.Fetch() error = %v, want error containing %v", err.Error(), tt.errMsg)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestParseConfig(t *testing.T) {
 	tests := []struct {
 		name        string

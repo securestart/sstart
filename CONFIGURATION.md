@@ -2,6 +2,8 @@
 
 The `.sstart.yml` file defines your providers and secret mappings.
 
+> **SSO Authentication**: sstart supports OIDC-based Single Sign-On for provider authentication. See [SSO.md](SSO.md) for details on configuring SSO.
+
 ## Basic Structure
 
 ```yaml
@@ -653,4 +655,27 @@ providers:
 ```
 
 This is useful for ensuring a clean, reproducible environment in CI/CD pipelines or when you want to guarantee that only explicitly configured secrets are available.
+
+## SSO Authentication
+
+sstart supports OIDC-based Single Sign-On for authenticating with secret providers. When SSO is configured, sstart automatically initiates an authentication flow before fetching secrets.
+
+```yaml
+sso:
+  oidc:
+    clientId: your-client-id
+    issuer: https://auth.example.com
+    scopes:
+      - openid
+      - profile
+      - email
+
+providers:
+  - kind: vault
+    path: secret/myapp
+```
+
+The SSO access token is made available to providers for authentication but is NOT injected into subprocess environment variables.
+
+For complete SSO configuration options, authentication flows, and provider integration details, see [SSO.md](SSO.md).
 

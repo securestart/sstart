@@ -33,7 +33,7 @@ Example:
 		}
 
 		// Create collector and runner
-		collector := secrets.NewCollector(cfg)
+		collector := secrets.NewCollector(cfg, secrets.WithForceAuth(forceAuth))
 		runner := app.NewRunner(collector, cfg.Inherit)
 
 		// Run the command

@@ -1,4 +1,4 @@
-package config
+package end2end
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dirathea/sstart/internal/config"
 	"github.com/dirathea/sstart/internal/provider"
 	_ "github.com/dirathea/sstart/internal/provider/aws"
 	_ "github.com/dirathea/sstart/internal/provider/dotenv"
@@ -31,8 +32,10 @@ providers:
     id: vault-test
     path: myapp/secret
     address: https://vault.example.com:8200
-    token: test-token-123
     mount: secret-v2
+    auth:
+      method: token
+      token: test-token-123
 `,
 			providerKind: "vault",
 			providerID:   "vault-test",
@@ -42,9 +45,6 @@ providers:
 				}
 				if address, ok := cfg["address"].(string); !ok || address != "https://vault.example.com:8200" {
 					t.Errorf("expected address='https://vault.example.com:8200', got %v", cfg["address"])
-				}
-				if token, ok := cfg["token"].(string); !ok || token != "test-token-123" {
-					t.Errorf("expected token='test-token-123', got %v", cfg["token"])
 				}
 				if mount, ok := cfg["mount"].(string); !ok || mount != "secret-v2" {
 					t.Errorf("expected mount='secret-v2', got %v", cfg["mount"])
@@ -159,13 +159,13 @@ providers:
 			}
 
 			// Load config from YAML
-			config, err := Load(yamlFile)
+			cfg, err := config.Load(yamlFile)
 			if err != nil {
 				t.Fatalf("Failed to load config: %v", err)
 			}
 
 			// Get provider config
-			providerCfg, err := config.GetProvider(tt.providerID)
+			providerCfg, err := cfg.GetProvider(tt.providerID)
 			if err != nil {
 				t.Fatalf("Failed to get provider config: %v", err)
 			}
@@ -205,8 +205,10 @@ providers:
     id: vault-parse
     path: test/path
     address: http://localhost:8200
-    token: dev-token
     mount: kv
+    auth:
+      method: token
+      token: dev-token
 `,
 			providerKind: "vault",
 			providerID:   "vault-parse",
@@ -215,7 +217,7 @@ providers:
 				// We can't test Fetch without a real Vault instance,
 				// but we can verify the config structure is correct
 				// by checking that parseConfig would work (tested indirectly via config structure)
-				expectedFields := []string{"path", "address", "token", "mount"}
+				expectedFields := []string{"path", "address", "mount"}
 				for _, field := range expectedFields {
 					if _, exists := cfg[field]; !exists {
 						t.Errorf("Expected field '%s' to be present in config", field)
@@ -291,13 +293,13 @@ providers:
 			}
 
 			// Load config
-			config, err := Load(yamlFile)
+			cfg, err := config.Load(yamlFile)
 			if err != nil {
 				t.Fatalf("Failed to load config: %v", err)
 			}
 
 			// Get provider config
-			providerCfg, err := config.GetProvider(tt.providerID)
+			providerCfg, err := cfg.GetProvider(tt.providerID)
 			if err != nil {
 				t.Fatalf("Failed to get provider config: %v", err)
 			}
@@ -318,7 +320,9 @@ providers:
     id: vault-prod
     path: prod/secret
     address: https://vault.prod.com
-    token: prod-token
+    auth:
+      method: token
+      token: prod-token
   
   - kind: aws_secretsmanager
     id: aws-prod
@@ -341,18 +345,18 @@ providers:
 	}
 
 	// Load config
-	config, err := Load(yamlFile)
+	cfg, err := config.Load(yamlFile)
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
 	// Verify all providers are loaded
-	if len(config.Providers) != 4 {
-		t.Fatalf("Expected 4 providers, got %d", len(config.Providers))
+	if len(cfg.Providers) != 4 {
+		t.Fatalf("Expected 4 providers, got %d", len(cfg.Providers))
 	}
 
 	// Test vault provider
-	vaultCfg, err := config.GetProvider("vault-prod")
+	vaultCfg, err := cfg.GetProvider("vault-prod")
 	if err != nil {
 		t.Fatalf("Failed to get vault provider: %v", err)
 	}
@@ -361,7 +365,7 @@ providers:
 	}
 
 	// Test AWS provider
-	awsCfg, err := config.GetProvider("aws-prod")
+	awsCfg, err := cfg.GetProvider("aws-prod")
 	if err != nil {
 		t.Fatalf("Failed to get aws provider: %v", err)
 	}
@@ -370,7 +374,7 @@ providers:
 	}
 
 	// Test dotenv providers
-	dotenvLocalCfg, err := config.GetProvider("dotenv-local")
+	dotenvLocalCfg, err := cfg.GetProvider("dotenv-local")
 	if err != nil {
 		t.Fatalf("Failed to get dotenv-local provider: %v", err)
 	}
@@ -378,7 +382,7 @@ providers:
 		t.Errorf("dotenv-local path = %v, want '.env.local'", dotenvLocalCfg.Config["path"])
 	}
 
-	dotenvSharedCfg, err := config.GetProvider("dotenv-shared")
+	dotenvSharedCfg, err := cfg.GetProvider("dotenv-shared")
 	if err != nil {
 		t.Fatalf("Failed to get dotenv-shared provider: %v", err)
 	}
@@ -420,16 +424,16 @@ providers:
 		t.Fatalf("Failed to create test YAML file: %v", err)
 	}
 
-	config, err := Load(yamlFile)
+	cfg, err := config.Load(yamlFile)
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
 	// Test that each provider has its own isolated config
-	vault1, _ := config.GetProvider("vault1")
-	vault2, _ := config.GetProvider("vault2")
-	aws1, _ := config.GetProvider("aws1")
-	aws2, _ := config.GetProvider("aws2")
+	vault1, _ := cfg.GetProvider("vault1")
+	vault2, _ := cfg.GetProvider("vault2")
+	aws1, _ := cfg.GetProvider("aws1")
+	aws2, _ := cfg.GetProvider("aws2")
 
 	// Verify vault1 doesn't have vault2's mount
 	if mount, exists := vault1.Config["mount"]; exists {
@@ -477,13 +481,13 @@ providers:
 		t.Fatalf("Failed to create test YAML file: %v", err)
 	}
 
-	config, err := Load(yamlFile)
+	cfg, err := config.Load(yamlFile)
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
 	// Test vault keys
-	vaultCfg, _ := config.GetProvider("vault-keys")
+	vaultCfg, _ := cfg.GetProvider("vault-keys")
 	if len(vaultCfg.Keys) != 2 {
 		t.Fatalf("Expected 2 keys for vault, got %d", len(vaultCfg.Keys))
 	}
@@ -495,7 +499,7 @@ providers:
 	}
 
 	// Test aws keys
-	awsCfg, _ := config.GetProvider("aws-keys")
+	awsCfg, _ := cfg.GetProvider("aws-keys")
 	if len(awsCfg.Keys) != 2 {
 		t.Fatalf("Expected 2 keys for aws, got %d", len(awsCfg.Keys))
 	}
@@ -534,8 +538,10 @@ providers:
     id: vault-parse-test
     path: test/path
     address: http://localhost:8200
-    token: test-token
     mount: kv
+    auth:
+      method: token
+      token: test-token
 `,
 			providerKind:   "vault",
 			providerID:     "vault-parse-test",
@@ -619,13 +625,13 @@ providers:
 			}
 
 			// Load config from YAML
-			config, err := Load(yamlFile)
+			cfg, err := config.Load(yamlFile)
 			if err != nil {
 				t.Fatalf("Failed to load config: %v", err)
 			}
 
 			// Get provider config
-			providerCfg, err := config.GetProvider(tt.providerID)
+			providerCfg, err := cfg.GetProvider(tt.providerID)
 			if err != nil {
 				t.Fatalf("Failed to get provider config: %v", err)
 			}
@@ -674,3 +680,266 @@ providers:
 		})
 	}
 }
+
+// TestSSOConfig_Load tests that SSO configuration can be loaded from YAML
+func TestSSOConfig_Load(t *testing.T) {
+	tests := []struct {
+		name          string
+		yamlContent   string
+		expectError   bool
+		errorContains string
+		validateFunc  func(t *testing.T, cfg *config.Config)
+	}{
+		{
+			name: "SSO config with full OIDC configuration",
+			yamlContent: `
+sso:
+  oidc:
+    clientId: my-sso-client-id
+    issuer: https://example.com/oidc
+    scopes:
+      - openid
+      - profile
+      - email
+`,
+			expectError: false,
+			validateFunc: func(t *testing.T, cfg *config.Config) {
+				if cfg.SSO == nil {
+					t.Fatal("expected SSO config to be set")
+				}
+				if cfg.SSO.OIDC == nil {
+					t.Fatal("expected OIDC config to be set")
+				}
+				if cfg.SSO.OIDC.ClientID != "my-sso-client-id" {
+					t.Errorf("expected ClientID='my-sso-client-id', got '%s'", cfg.SSO.OIDC.ClientID)
+				}
+				if cfg.SSO.OIDC.Issuer != "https://example.com/oidc" {
+					t.Errorf("expected Issuer='https://example.com/oidc', got '%s'", cfg.SSO.OIDC.Issuer)
+				}
+				expectedScopes := []string{"openid", "profile", "email"}
+				if len(cfg.SSO.OIDC.Scopes) != len(expectedScopes) {
+					t.Errorf("expected %d scopes, got %d", len(expectedScopes), len(cfg.SSO.OIDC.Scopes))
+				}
+				for i, scope := range expectedScopes {
+					if cfg.SSO.OIDC.Scopes[i] != scope {
+						t.Errorf("expected scope[%d]='%s', got '%s'", i, scope, cfg.SSO.OIDC.Scopes[i])
+					}
+				}
+			},
+		},
+		{
+			name: "SSO config with scopes as space-separated string",
+			yamlContent: `
+sso:
+  oidc:
+    clientId: my-sso-client-id
+    issuer: https://example.com/oidc
+    scopes: openid profile email
+`,
+			expectError: false,
+			validateFunc: func(t *testing.T, cfg *config.Config) {
+				if cfg.SSO.OIDC == nil {
+					t.Fatal("expected OIDC config to be set")
+				}
+				expectedScopes := []string{"openid", "profile", "email"}
+				if len(cfg.SSO.OIDC.Scopes) != len(expectedScopes) {
+					t.Errorf("expected %d scopes, got %d", len(expectedScopes), len(cfg.SSO.OIDC.Scopes))
+				}
+				for i, scope := range expectedScopes {
+					if cfg.SSO.OIDC.Scopes[i] != scope {
+						t.Errorf("expected scope[%d]='%s', got '%s'", i, scope, cfg.SSO.OIDC.Scopes[i])
+					}
+				}
+			},
+		},
+		{
+			name: "SSO config with clientSecret (no PKCE)",
+			yamlContent: `
+sso:
+  oidc:
+    clientId: my-sso-client-id
+    clientSecret: my-client-secret
+    issuer: https://example.com/oidc
+    scopes:
+      - openid
+      - profile
+`,
+			expectError: false,
+			validateFunc: func(t *testing.T, cfg *config.Config) {
+				if cfg.SSO.OIDC.ClientSecret != "my-client-secret" {
+					t.Errorf("expected ClientSecret='my-client-secret', got '%s'", cfg.SSO.OIDC.ClientSecret)
+				}
+			},
+		},
+		{
+			name: "SSO config with PKCE explicitly enabled",
+			yamlContent: `
+sso:
+  oidc:
+    clientId: my-sso-client-id
+    issuer: https://example.com/oidc
+    scopes:
+      - openid
+    pkce: true
+`,
+			expectError: false,
+			validateFunc: func(t *testing.T, cfg *config.Config) {
+				if cfg.SSO.OIDC.PKCE == nil {
+					t.Error("expected PKCE to be set")
+				} else if !*cfg.SSO.OIDC.PKCE {
+					t.Error("expected PKCE to be true")
+				}
+			},
+		},
+		{
+			name: "SSO config with redirectURI",
+			yamlContent: `
+sso:
+  oidc:
+    clientId: my-sso-client-id
+    issuer: https://example.com/oidc
+    scopes:
+      - openid
+    redirectUri: http://localhost:8080/auth/callback
+`,
+			expectError: false,
+			validateFunc: func(t *testing.T, cfg *config.Config) {
+				expectedURI := "http://localhost:8080/auth/callback"
+				if cfg.SSO.OIDC.RedirectURI != expectedURI {
+					t.Errorf("expected RedirectURI='%s', got '%s'", expectedURI, cfg.SSO.OIDC.RedirectURI)
+				}
+			},
+		},
+		{
+			name: "SSO config with responseMode",
+			yamlContent: `
+sso:
+  oidc:
+    clientId: my-sso-client-id
+    issuer: https://example.com/oidc
+    scopes:
+      - openid
+    responseMode: query
+`,
+			expectError: false,
+			validateFunc: func(t *testing.T, cfg *config.Config) {
+				if cfg.SSO.OIDC.ResponseMode != "query" {
+					t.Errorf("expected ResponseMode='query', got '%s'", cfg.SSO.OIDC.ResponseMode)
+				}
+			},
+		},
+		{
+			name: "Config without SSO",
+			yamlContent: `
+providers:
+  - kind: dotenv
+    path: .env
+`,
+			expectError: false,
+			validateFunc: func(t *testing.T, cfg *config.Config) {
+				if cfg.SSO != nil {
+					t.Error("expected SSO config to be nil when not specified")
+				}
+			},
+		},
+		{
+			name: "Config with SSO but no OIDC",
+			yamlContent: `
+sso: {}
+providers:
+  - kind: dotenv
+    path: .env
+`,
+			expectError: false,
+			validateFunc: func(t *testing.T, cfg *config.Config) {
+				if cfg.SSO == nil {
+					t.Fatal("expected SSO config to be set")
+				}
+				if cfg.SSO.OIDC != nil {
+					t.Error("expected OIDC config to be nil when not specified")
+				}
+			},
+		},
+		{
+			name: "SSO config missing required clientId",
+			yamlContent: `
+sso:
+  oidc:
+    issuer: https://example.com/oidc
+    scopes:
+      - openid
+`,
+			expectError:   true,
+			errorContains: "sso.oidc.clientId is required",
+		},
+		{
+			name: "SSO config missing required issuer",
+			yamlContent: `
+sso:
+  oidc:
+    clientId: my-sso-client-id
+    scopes:
+      - openid
+`,
+			expectError:   true,
+			errorContains: "sso.oidc.issuer is required",
+		},
+		{
+			name: "SSO config missing required scopes",
+			yamlContent: `
+sso:
+  oidc:
+    clientId: my-sso-client-id
+    issuer: https://example.com/oidc
+`,
+			expectError:   true,
+			errorContains: "sso.oidc.scopes is required",
+		},
+		{
+			name: "SSO config with empty scopes array",
+			yamlContent: `
+sso:
+  oidc:
+    clientId: my-sso-client-id
+    issuer: https://example.com/oidc
+    scopes: []
+`,
+			expectError:   true,
+			errorContains: "sso.oidc.scopes is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temporary YAML file
+			tmpDir := t.TempDir()
+			yamlFile := filepath.Join(tmpDir, "test.yml")
+			if err := os.WriteFile(yamlFile, []byte(tt.yamlContent), 0644); err != nil {
+				t.Fatalf("Failed to create test YAML file: %v", err)
+			}
+
+			// Load config
+			cfg, err := config.Load(yamlFile)
+
+			if tt.expectError {
+				if err == nil {
+					t.Fatal("expected error but got none")
+				}
+				if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("expected error to contain '%s', got: %v", tt.errorContains, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Failed to load config: %v", err)
+			}
+
+			// Validate
+			if tt.validateFunc != nil {
+				tt.validateFunc(t, cfg)
+			}
+		})
+	}
+}
+

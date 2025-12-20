@@ -8,22 +8,64 @@ import (
 	"strings"
 
 	"github.com/dirathea/sstart/internal/config"
+	"github.com/dirathea/sstart/internal/oidc"
 	"github.com/dirathea/sstart/internal/provider"
+)
+
+const (
+	// AccessTokenConfigKey is the key used to inject access token into provider config
+	AccessTokenConfigKey = "_sso_access_token"
+	// IDTokenConfigKey is the key used to inject ID token into provider config
+	IDTokenConfigKey = "_sso_id_token"
 )
 
 // Collector collects secrets from all configured providers
 type Collector struct {
-	config *config.Config
+	config      *config.Config
+	ssoClient   *oidc.Client
+	accessToken string
+	idToken     string
+	forceAuth   bool
+}
+
+// CollectorOption is a functional option for configuring the Collector
+type CollectorOption func(*Collector)
+
+// WithForceAuth returns an option that forces re-authentication by ignoring cached tokens
+func WithForceAuth(forceAuth bool) CollectorOption {
+	return func(c *Collector) {
+		c.forceAuth = forceAuth
+	}
 }
 
 // NewCollector creates a new secrets collector
-func NewCollector(cfg *config.Config) *Collector {
-	return &Collector{config: cfg}
+func NewCollector(cfg *config.Config, opts ...CollectorOption) *Collector {
+	collector := &Collector{config: cfg}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(collector)
+	}
+
+	// Initialize SSO client if configured
+	if cfg.SSO != nil && cfg.SSO.OIDC != nil {
+		client, err := oidc.NewClient(cfg.SSO.OIDC)
+		if err == nil {
+			collector.ssoClient = client
+		}
+	}
+
+	return collector
 }
 
 // Collect fetches secrets from all providers and combines them
 func (c *Collector) Collect(ctx context.Context, providerIDs []string) (map[string]string, error) {
 	secrets := make(map[string]string)
+
+	// Authenticate with SSO if configured
+	if err := c.authenticateSSO(ctx); err != nil {
+		return nil, fmt.Errorf("SSO authentication failed: %w", err)
+	}
 
 	// If no providers specified, use all providers in order
 	if len(providerIDs) == 0 {
@@ -48,6 +90,9 @@ func (c *Collector) Collect(ctx context.Context, providerIDs []string) (map[stri
 		// Expand template variables in config (e.g., in path fields)
 		expandedConfig := expandConfigTemplates(providerCfg.Config)
 
+		// Inject SSO tokens into provider config if available
+		c.injectTokensIntoConfig(expandedConfig)
+
 		// Fetch secrets from this provider's single source
 		kvs, err := prov.Fetch(ctx, providerCfg.ID, expandedConfig, providerCfg.Keys)
 		if err != nil {
@@ -61,6 +106,53 @@ func (c *Collector) Collect(ctx context.Context, providerIDs []string) (map[stri
 	}
 
 	return secrets, nil
+}
+
+// authenticateSSO handles SSO authentication if configured
+func (c *Collector) authenticateSSO(ctx context.Context) error {
+	if c.ssoClient == nil {
+		return nil
+	}
+
+	// Check if already authenticated (skip if --force-auth is set)
+	if !c.forceAuth && c.ssoClient.IsAuthenticated() {
+		// Try to get the access token
+		token, err := c.ssoClient.GetAccessToken(ctx)
+		if err == nil {
+			c.accessToken = token
+			// Also get ID token if available
+			tokens, err := c.ssoClient.GetTokens()
+			if err == nil && tokens.IDToken != "" {
+				c.idToken = tokens.IDToken
+			}
+			return nil
+		}
+		// Token expired or invalid, need to re-authenticate
+	}
+
+	// Initiate login flow
+	result, err := c.ssoClient.Login(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Store tokens
+	if result.Tokens != nil {
+		c.accessToken = result.Tokens.AccessToken
+		c.idToken = result.Tokens.IDToken
+	}
+
+	return nil
+}
+
+// injectTokensIntoConfig adds SSO tokens to the provider config for provider authentication
+func (c *Collector) injectTokensIntoConfig(config map[string]interface{}) {
+	if c.accessToken != "" {
+		config[AccessTokenConfigKey] = c.accessToken
+	}
+	if c.idToken != "" {
+		config[IDTokenConfigKey] = c.idToken
+	}
 }
 
 // expandConfigTemplates expands template variables in config values

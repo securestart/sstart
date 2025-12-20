@@ -252,6 +252,65 @@ func SetupVaultSecret(ctx context.Context, t *testing.T, vaultContainer *VaultCo
 	}
 }
 
+// SetupVaultJWTAuth enables and configures JWT auth method in Vault
+// publicKeyPEM is the PEM-encoded public key for validating JWTs
+// role is the name of the role to create
+// boundClaims are optional claims that must be present in the JWT
+func SetupVaultJWTAuth(ctx context.Context, t *testing.T, vaultContainer *VaultContainer, publicKeyPEM string, role string, policies []string, boundClaims map[string]interface{}) {
+	t.Helper()
+
+	// Enable JWT auth method
+	_, err := vaultContainer.Client.Logical().Write("sys/auth/jwt", map[string]interface{}{
+		"type":        "jwt",
+		"description": "JWT auth method",
+	})
+	if err != nil {
+		// If already enabled, that's okay
+		if !strings.Contains(err.Error(), "path is already in use") {
+			t.Fatalf("Failed to enable JWT auth method: %v", err)
+		}
+	}
+
+	// Configure JWT auth method
+	jwtConfig := map[string]interface{}{
+		"jwt_validation_pubkeys": []string{publicKeyPEM},
+	}
+	_, err = vaultContainer.Client.Logical().Write("auth/jwt/config", jwtConfig)
+	if err != nil {
+		t.Fatalf("Failed to configure JWT auth method: %v", err)
+	}
+
+	// Create role for JWT auth
+	roleConfig := map[string]interface{}{
+		"role_type":       "jwt",
+		"user_claim":      "sub",
+		"policies":        policies,
+		"bound_audiences": []string{"vault"}, // Required: at least one bound constraint
+	}
+
+	// Add bound claims if provided
+	if len(boundClaims) > 0 {
+		roleConfig["bound_claims"] = boundClaims
+	}
+
+	_, err = vaultContainer.Client.Logical().Write(fmt.Sprintf("auth/jwt/role/%s", role), roleConfig)
+	if err != nil {
+		t.Fatalf("Failed to create JWT role: %v", err)
+	}
+}
+
+// SetupVaultPolicy creates a policy in Vault
+func SetupVaultPolicy(ctx context.Context, t *testing.T, vaultContainer *VaultContainer, policyName string, policyHCL string) {
+	t.Helper()
+
+	_, err := vaultContainer.Client.Logical().Write(fmt.Sprintf("sys/policies/acl/%s", policyName), map[string]interface{}{
+		"policy": policyHCL,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create Vault policy: %v", err)
+	}
+}
+
 // SetupOpenBaoSecret enables KV v2 engine (if needed) and writes a secret to OpenBao
 // OpenBao is API-compatible with Vault, so this function is similar to SetupVaultSecret
 func SetupOpenBaoSecret(ctx context.Context, t *testing.T, openbaoContainer *OpenBaoContainer, openbaoPath string, secretData map[string]interface{}) {

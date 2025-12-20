@@ -24,7 +24,7 @@ Only the first 2 and last 2 characters are shown.`,
 		}
 
 		// Collect secrets
-		collector := secrets.NewCollector(cfg)
+		collector := secrets.NewCollector(cfg, secrets.WithForceAuth(forceAuth))
 		showProviders := providers
 		if len(showProviders) == 0 {
 			showProviders = nil // Use all providers

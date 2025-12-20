@@ -3,14 +3,87 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Config represents the main configuration structure
 type Config struct {
-	Inherit   bool             `yaml:"inherit"`   // Whether to inherit system environment variables (default: true)
+	Inherit   bool             `yaml:"inherit"` // Whether to inherit system environment variables (default: true)
 	Providers []ProviderConfig `yaml:"providers"`
+	SSO       *SSOConfig       `yaml:"sso,omitempty"` // SSO configuration
+}
+
+// SSOConfig represents SSO configuration
+type SSOConfig struct {
+	OIDC *OIDCConfig `yaml:"oidc,omitempty"` // OIDC configuration
+}
+
+// OIDCConfig represents OIDC configuration
+type OIDCConfig struct {
+	ClientID     string   `yaml:"clientId"`               // OIDC client ID (required)
+	ClientSecret string   `yaml:"clientSecret,omitempty"` // OIDC client secret (optional, if not provided, PKCE is used)
+	Issuer       string   `yaml:"issuer"`                 // OIDC issuer URL (required)
+	Scopes       []string `yaml:"scopes"`                 // OIDC scopes (required)
+	RedirectURI  string   `yaml:"redirectUri,omitempty"`  // OIDC redirect URI (optional, can be auto-generated)
+	PKCE         *bool    `yaml:"pkce,omitempty"`         // Enable PKCE flow (optional, auto-enabled if clientSecret is empty)
+	ResponseMode string   `yaml:"responseMode,omitempty"` // OIDC response mode (optional)
+}
+
+// UnmarshalYAML implements custom YAML unmarshaling to handle scopes as either array or space-separated string
+func (o *OIDCConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	// Create a temporary struct to unmarshal into
+	type rawOIDCConfig struct {
+		ClientID     string      `yaml:"clientId"`
+		ClientSecret string      `yaml:"clientSecret,omitempty"`
+		Issuer       string      `yaml:"issuer"`
+		Scopes       interface{} `yaml:"scopes"` // Use interface{} to handle both string and []string
+		RedirectURI  string      `yaml:"redirectUri,omitempty"`
+		PKCE         *bool       `yaml:"pkce,omitempty"`
+		ResponseMode string      `yaml:"responseMode,omitempty"`
+	}
+
+	var raw rawOIDCConfig
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+
+	// Copy fields
+	o.ClientID = raw.ClientID
+	o.ClientSecret = raw.ClientSecret
+	o.Issuer = raw.Issuer
+	o.RedirectURI = raw.RedirectURI
+	o.PKCE = raw.PKCE
+	o.ResponseMode = raw.ResponseMode
+
+	// Handle scopes: can be string (space-separated) or []string
+	if raw.Scopes != nil {
+		switch v := raw.Scopes.(type) {
+		case string:
+			// Split space-separated string
+			if v != "" {
+				o.Scopes = strings.Fields(v)
+			} else {
+				o.Scopes = []string{}
+			}
+		case []interface{}:
+			// Convert []interface{} to []string
+			o.Scopes = make([]string, 0, len(v))
+			for _, item := range v {
+				if str, ok := item.(string); ok {
+					o.Scopes = append(o.Scopes, str)
+				}
+			}
+		case []string:
+			// Already []string
+			o.Scopes = v
+		default:
+			return fmt.Errorf("invalid scopes format: expected string or array of strings")
+		}
+	}
+
+	return nil
 }
 
 // ProviderConfig represents a single provider configuration
@@ -144,6 +217,20 @@ func Load(path string) (*Config, error) {
 		idCounts[id]++
 		if idCounts[id] > 1 {
 			return nil, fmt.Errorf("duplicate provider id '%s' found at index %d - all provider ids must be unique", id, i)
+		}
+	}
+
+	// Validate SSO configuration if present
+	if config.SSO != nil && config.SSO.OIDC != nil {
+		oidc := config.SSO.OIDC
+		if oidc.ClientID == "" {
+			return nil, fmt.Errorf("sso.oidc.clientId is required")
+		}
+		if oidc.Issuer == "" {
+			return nil, fmt.Errorf("sso.oidc.issuer is required")
+		}
+		if len(oidc.Scopes) == 0 {
+			return nil, fmt.Errorf("sso.oidc.scopes is required and must contain at least one scope")
 		}
 	}
 

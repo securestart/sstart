@@ -22,6 +22,7 @@ var (
 	configPath string
 	verbose    bool
 	providers  []string
+	forceAuth  bool
 )
 
 var rootCmd = &cobra.Command{
@@ -52,7 +53,7 @@ Examples:
 		}
 
 		// Create collector and runner
-		collector := secrets.NewCollector(cfg)
+		collector := secrets.NewCollector(cfg, secrets.WithForceAuth(forceAuth))
 		runner := app.NewRunner(collector, cfg.Inherit)
 
 		// Run the command
@@ -68,4 +69,5 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", ".sstart.yml", "Path to configuration file")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output")
 	rootCmd.PersistentFlags().StringSliceVar(&providers, "providers", []string{}, "Comma-separated list of provider IDs to use (default: all providers)")
+	rootCmd.PersistentFlags().BoolVar(&forceAuth, "force-auth", false, "Force re-authentication, ignoring cached SSO tokens")
 }
