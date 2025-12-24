@@ -140,17 +140,13 @@ jobs:
               core.setOutput('skip_tests', 'false');
             }
 
-      - name: Install gotestsum
-        if: steps.test_filter.outputs.skip_tests != 'true'
-        run: |
-          go install gotest.tools/gotestsum@latest
-
       - name: Run end-to-end tests
         if: steps.test_filter.outputs.skip_tests != 'true'
         env:
           CGO_LDFLAGS: -lm
           # the rest of env supplied by setup-sstart-env
         run: |
+          go install gotest.tools/gotestsum
           if [ "${{ steps.test_filter.outputs.run_all_tests }}" = "true" ]; then
             echo "Running all end-to-end tests"
             gotestsum --junitfile test-results.xml --format testname -- ./tests/end2end/...
