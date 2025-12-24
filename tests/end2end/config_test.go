@@ -758,7 +758,6 @@ sso:
 sso:
   oidc:
     clientId: my-sso-client-id
-    clientSecret: my-client-secret
     issuer: https://example.com/oidc
     scopes:
       - openid
@@ -766,8 +765,11 @@ sso:
 `,
 			expectError: false,
 			validateFunc: func(t *testing.T, cfg *config.Config) {
-				if cfg.SSO.OIDC.ClientSecret != "my-client-secret" {
-					t.Errorf("expected ClientSecret='my-client-secret', got '%s'", cfg.SSO.OIDC.ClientSecret)
+				// ClientSecret is intentionally NOT parsed from YAML for security reasons.
+				// It must be provided via the SSTART_SSO_SECRET environment variable.
+				// This test verifies the config loads correctly without clientSecret in YAML.
+				if cfg.SSO.OIDC.ClientSecret != "" {
+					t.Errorf("expected ClientSecret to be empty (must be set via env var, not YAML), got '%s'", cfg.SSO.OIDC.ClientSecret)
 				}
 			},
 		},
