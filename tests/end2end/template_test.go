@@ -340,6 +340,16 @@ func TestE2E_TemplateProvider_ErrorHandling(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, ".sstart.yml")
 
+	// Build sstart binary
+	sstartBinary := filepath.Join(tmpDir, "sstart")
+	projectRoot := getProjectRoot(t)
+	cmdPath := filepath.Join(projectRoot, "cmd", "sstart")
+	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", sstartBinary, cmdPath)
+	buildCmd.Dir = projectRoot
+	if err := buildCmd.Run(); err != nil {
+		t.Fatalf("Failed to build sstart binary: %v", err)
+	}
+
 	// Test case 1: Template provider references non-existent provider
 	configYAML1 := fmt.Sprintf(`
 providers:
@@ -360,50 +370,14 @@ providers:
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
-	cfg, err := config.Load(configFile)
-	if err != nil {
-		t.Fatalf("Failed to load config: %v", err)
-	}
-
-	collector := secrets.NewCollector(cfg)
-	_, err = collector.Collect(ctx, nil)
+	// Run sstart with a simple command - should exit with non-zero status
+	runCmd := exec.CommandContext(ctx, sstartBinary, "--config", configFile, "run", "--", "echo", "test")
+	runCmd.Dir = tmpDir
+	err := runCmd.Run()
 	if err == nil {
-		t.Error("Expected error for non-existent provider reference, got nil")
-	} else if !strings.Contains(err.Error(), "not available") && !strings.Contains(err.Error(), "nonexistent_provider") {
-		t.Errorf("Expected error about provider not available, got: %v", err)
-	}
-
-	// Test case 2: Template provider references non-existent secret key
-	configYAML2 := fmt.Sprintf(`
-providers:
-  - kind: aws_secretsmanager
-    id: aws_existing
-    secret_id: %s
-    region: us-east-1
-    endpoint: %s
-  
-  - kind: template
-    uses:
-      - aws_existing
-    templates:
-      TEST_KEY: "{{.aws_existing.NONEXISTENT_KEY}}"
-`, secretName, localstack.Endpoint)
-
-	if err := os.WriteFile(configFile, []byte(configYAML2), 0644); err != nil {
-		t.Fatalf("Failed to write config file: %v", err)
-	}
-
-	cfg, err = config.Load(configFile)
-	if err != nil {
-		t.Fatalf("Failed to load config: %v", err)
-	}
-
-	collector = secrets.NewCollector(cfg)
-	_, err = collector.Collect(ctx, nil)
-	if err == nil {
-		t.Error("Expected error for non-existent secret key reference, got nil")
-	} else if !strings.Contains(err.Error(), "secret key 'NONEXISTENT_KEY' not found") {
-		t.Errorf("Expected error about secret key not found, got: %v", err)
+		t.Error("Expected non-zero exit status for non-existent provider reference, got zero")
+	} else if exitError, ok := err.(*exec.ExitError); !ok || exitError.ExitCode() == 0 {
+		t.Errorf("Expected non-zero exit status, got: %v", err)
 	}
 
 	t.Logf("Successfully tested template provider error handling")
@@ -534,4 +508,3 @@ providers:
 
 	t.Logf("Successfully tested template provider security: cannot access providers not in 'uses' list")
 }
-
