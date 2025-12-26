@@ -96,7 +96,8 @@ func (p *BitwardenProvider) Name() string {
 }
 
 // Fetch fetches secrets from personal Bitwarden vault using REST API
-func (p *BitwardenProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *BitwardenProvider) Fetch(secretContext provider.SecretContext, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+	ctx := secretContext.Ctx
 	// Convert map to strongly typed config struct
 	cfg, err := parseConfig(config)
 	if err != nil {

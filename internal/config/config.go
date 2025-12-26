@@ -89,11 +89,13 @@ func (o *OIDCConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // Each provider loads from a single source. To load multiple secrets from the same provider type,
 // configure multiple provider instances with the same 'kind' but different 'id' values.
 type ProviderConfig struct {
-	Kind   string                 `yaml:"kind"`
-	ID     string                 `yaml:"id,omitempty"`   // Optional: defaults to 'kind'. Required if multiple providers share the same kind
-	Config map[string]interface{} `yaml:"-"`              // Provider-specific configuration (e.g., path, region, endpoint, etc.)
-	Keys   map[string]string      `yaml:"keys,omitempty"` // Optional key mappings (source_key: target_key, or "==" to keep same name)
-	Env    EnvVars                `yaml:"env,omitempty"`
+	Kind      string                 `yaml:"kind"`
+	ID        string                 `yaml:"id,omitempty"`        // Optional: defaults to 'kind'. Required if multiple providers share the same kind
+	Config    map[string]interface{} `yaml:"-"`                   // Provider-specific configuration (e.g., path, region, endpoint, etc.)
+	Keys      map[string]string      `yaml:"keys,omitempty"`      // Optional key mappings (source_key: target_key, or "==" to keep same name)
+	Templates map[string]string      `yaml:"templates,omitempty"` // Optional templates for template provider (target_key: template_expression)
+	Env       EnvVars                `yaml:"env,omitempty"`
+	Uses      []string               `yaml:"uses,omitempty"` // Optional list of provider IDs to depend on
 }
 
 // UnmarshalYAML implements custom YAML unmarshaling to capture provider-specific fields
@@ -125,6 +127,16 @@ func (p *ProviderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 		delete(raw, "keys")
 	}
 
+	if templates, ok := raw["templates"].(map[string]interface{}); ok {
+		p.Templates = make(map[string]string)
+		for k, v := range templates {
+			if str, ok := v.(string); ok {
+				p.Templates[k] = str
+			}
+		}
+		delete(raw, "templates")
+	}
+
 	if env, ok := raw["env"].(map[string]interface{}); ok {
 		p.Env = make(EnvVars)
 		for k, v := range env {
@@ -133,6 +145,16 @@ func (p *ProviderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 			}
 		}
 		delete(raw, "env")
+	}
+
+	if uses, ok := raw["uses"].([]interface{}); ok {
+		p.Uses = make([]string, 0, len(uses))
+		for _, v := range uses {
+			if str, ok := v.(string); ok {
+				p.Uses = append(p.Uses, str)
+			}
+		}
+		delete(raw, "uses")
 	}
 
 	// Everything else goes into Config

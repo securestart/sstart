@@ -3,12 +3,14 @@ package aws
 import (
 	"context"
 	"testing"
+
+	"github.com/dirathea/sstart/internal/secrets"
 )
 
 func TestParseConfig(t *testing.T) {
 	tests := []struct {
-		name        string
-		config      map[string]interface{}
+		name         string
+		config       map[string]interface{}
 		wantSecretID string
 		wantRegion   string
 		wantEndpoint string
@@ -130,7 +132,8 @@ func TestSecretsManagerProvider_Fetch_ConfigValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			_, err := provider.Fetch(ctx, "test-map", tt.config, nil)
+			secretContext := secrets.NewEmptySecretContext(ctx)
+			_, err := provider.Fetch(secretContext, "test-map", tt.config, nil)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SecretsManagerProvider.Fetch() error = %v, wantErr %v", err, tt.wantErr)
@@ -261,4 +264,3 @@ func containsSubstring(s, substr string) bool {
 	}
 	return false
 }
-

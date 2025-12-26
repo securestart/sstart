@@ -590,6 +590,33 @@ You can also use simple environment variable expansion with `${VAR}` or `$VAR` s
     path: ${HOME}/.config/myapp/.env
 ```
 
+## Template Providers
+
+Sometimes we need a secret in different form, for example, when we have PG_USERNAME, PG_PASSWORD, PG_HOST, our apps might asked for PG_URI that basically constructed by forming `pgsql://${PG_USERNAME}:${PG_PASSWORD}@${PG_HOST}`. To do that, we can utilize a special `template` provider:
+
+```yaml
+providers:
+# Assume this providers has PG_HOST secret
+- kind: aws_secretsmanager
+  id: aws_generic
+  secret_id: rds/credentials
+# This secrets returns PG_USERNAME and PG_PASSWORD
+- kind: aws_secretsmanager
+  id: aws_prod
+  secret_id: rds/prod/credentials
+- kind: template
+  # list down all providers as dependencies
+  uses:
+    - aws_prod
+    - aws_generic
+  templates:
+    # We can construct the URI by referring them here.
+    # Pay attention to the dot notation. The format is similar to helm yaml template engine.
+    PG_URI: pgsql://{{.aws_prod.PG_USERNAME}}:{{.aws_prod.PG_PASSWORD}}@{{.aws_generic.PG_HOST}}
+```
+
+utilizing template provider, you can refer the previous secrets using `{{.<provider id>.<secret key>}}` to be used for secret builder here.
+
 ## Multiple Providers
 
 Each provider loads from a single source. To load multiple secrets from the same provider type, create multiple provider instances:

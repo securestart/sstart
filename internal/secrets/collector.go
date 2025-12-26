@@ -59,8 +59,10 @@ func NewCollector(cfg *config.Config, opts ...CollectorOption) *Collector {
 }
 
 // Collect fetches secrets from all providers and combines them
-func (c *Collector) Collect(ctx context.Context, providerIDs []string) (map[string]string, error) {
-	secrets := make(map[string]string)
+func (c *Collector) Collect(ctx context.Context, providerIDs []string) (provider.Secrets, error) {
+	secrets := make(provider.Secrets)
+	// Track secrets by provider ID for template providers
+	providerSecrets := make(provider.ProviderSecretsMap)
 
 	// Authenticate with SSO if configured
 	if err := c.authenticateSSO(ctx); err != nil {
@@ -93,10 +95,39 @@ func (c *Collector) Collect(ctx context.Context, providerIDs []string) (map[stri
 		// Inject SSO tokens into provider config if available
 		c.injectTokensIntoConfig(expandedConfig)
 
+		// Inject templates field for template provider
+		if len(providerCfg.Templates) > 0 {
+			// Convert Templates map to map[string]interface{} for config
+			templatesMap := make(map[string]interface{})
+			for k, v := range providerCfg.Templates {
+				templatesMap[k] = v
+			}
+			expandedConfig["templates"] = templatesMap
+		}
+
+		// Create SecretContext with resolver for providers
+		// Providers can optionally use SecretsResolver to access secrets from other providers
+		// This follows the principle of least privilege - providers only access secrets they explicitly request
+		// If 'uses' is specified, create a filtered resolver that only includes secrets from allowed providers
+		// If 'uses' is not specified, pass an empty resolver (no access to other providers' secrets)
+		var secretContext provider.SecretContext
+		if len(providerCfg.Uses) > 0 {
+			secretContext = NewSecretContext(ctx, providerSecrets, providerCfg.Uses)
+		} else {
+			// Pass empty provider secrets map when 'uses' is not defined
+			secretContext = NewEmptySecretContext(ctx)
+		}
+
 		// Fetch secrets from this provider's single source
-		kvs, err := prov.Fetch(ctx, providerCfg.ID, expandedConfig, providerCfg.Keys)
+		kvs, err := prov.Fetch(secretContext, providerCfg.ID, expandedConfig, providerCfg.Keys)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch from provider '%s': %w", providerID, err)
+		}
+
+		// Store secrets by provider ID for resolver
+		providerSecrets[providerID] = make(provider.Secrets)
+		for _, kv := range kvs {
+			providerSecrets[providerID][kv.Key] = kv.Value
 		}
 
 		// Merge secrets (later providers override earlier ones)
@@ -222,7 +253,7 @@ func expandTemplate(template string) string {
 }
 
 // Redact redacts secrets from text
-func Redact(text string, secrets map[string]string) string {
+func Redact(text string, secrets provider.Secrets) string {
 	result := text
 	for _, value := range secrets {
 		if len(value) > 0 {

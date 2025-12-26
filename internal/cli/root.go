@@ -11,6 +11,7 @@ import (
 	_ "github.com/dirathea/sstart/internal/provider/gcsm"
 	_ "github.com/dirathea/sstart/internal/provider/infisical"
 	_ "github.com/dirathea/sstart/internal/provider/onepassword"
+	_ "github.com/dirathea/sstart/internal/provider/template"
 	_ "github.com/dirathea/sstart/internal/provider/vault"
 	"github.com/dirathea/sstart/internal/app"
 	"github.com/dirathea/sstart/internal/config"

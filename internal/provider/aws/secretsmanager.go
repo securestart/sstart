@@ -42,7 +42,8 @@ func (p *SecretsManagerProvider) Name() string {
 }
 
 // Fetch fetches secrets from AWS Secrets Manager
-func (p *SecretsManagerProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *SecretsManagerProvider) Fetch(secretContext provider.SecretContext, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+	ctx := secretContext.Ctx
 	// Convert map to strongly typed config struct
 	cfg, err := parseConfig(config)
 	if err != nil {

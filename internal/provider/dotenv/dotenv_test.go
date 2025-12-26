@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	prov "github.com/dirathea/sstart/internal/provider"
+	"github.com/dirathea/sstart/internal/secrets"
 )
 
 func TestDotEnvProvider_Name(t *testing.T) {
@@ -60,7 +63,8 @@ func TestDotEnvProvider_Fetch_ConfigValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			_, err := provider.Fetch(ctx, "test-map", tt.config, nil)
+			secretContext := secrets.NewEmptySecretContext(ctx)
+			_, err := provider.Fetch(secretContext, "test-map", tt.config, nil)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DotEnvProvider.Fetch() error = %v, wantErr %v", err, tt.wantErr)
@@ -165,9 +169,10 @@ SECRET_VALUE=my-secret-value
 	}
 
 	ctx := context.Background()
+	secretContext := secrets.NewSecretContext(ctx, make(prov.ProviderSecretsMap), nil)
 
 	// Test fetching all keys (empty keys map)
-	result, err := provider.Fetch(ctx, "test-map", config, nil)
+	result, err := provider.Fetch(secretContext, "test-map", config, nil)
 	if err != nil {
 		t.Fatalf("DotEnvProvider.Fetch() error = %v", err)
 	}
@@ -217,7 +222,8 @@ OTHER_VALUE=should-not-appear
 	}
 
 	ctx := context.Background()
-	result, err := provider.Fetch(ctx, "test-map", config, keys)
+	secretContext := secrets.NewSecretContext(ctx, make(prov.ProviderSecretsMap), nil)
+	result, err := provider.Fetch(secretContext, "test-map", config, keys)
 	if err != nil {
 		t.Fatalf("DotEnvProvider.Fetch() error = %v", err)
 	}

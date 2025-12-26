@@ -1,7 +1,6 @@
 package dotenv
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -24,7 +23,7 @@ func (p *DotEnvProvider) Name() string {
 }
 
 // Fetch fetches secrets from a .env file
-func (p *DotEnvProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *DotEnvProvider) Fetch(secretContext provider.SecretContext, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
 	// Extract path from config
 	path, ok := config["path"].(string)
 	if !ok || path == "" {

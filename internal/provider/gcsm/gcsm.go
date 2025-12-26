@@ -44,7 +44,8 @@ func (p *GCSMProvider) Name() string {
 }
 
 // Fetch fetches secrets from Google Cloud Secret Manager
-func (p *GCSMProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *GCSMProvider) Fetch(secretContext provider.SecretContext, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+	ctx := secretContext.Ctx
 	// Convert map to strongly typed config struct
 	cfg, err := parseConfig(config)
 	if err != nil {

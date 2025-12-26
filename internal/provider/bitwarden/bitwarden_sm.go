@@ -1,7 +1,6 @@
 package bitwarden
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -41,7 +40,7 @@ func (p *BitwardenSMProvider) Name() string {
 
 // Fetch fetches all secrets from a Bitwarden Secret Manager project
 // Only Key-Value pairs are extracted from secrets. Note fields are ignored.
-func (p *BitwardenSMProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *BitwardenSMProvider) Fetch(secretContext provider.SecretContext, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
 	// Convert map to strongly typed config struct
 	cfg, err := parseSMConfig(config)
 	if err != nil {

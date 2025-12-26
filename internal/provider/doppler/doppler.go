@@ -1,7 +1,6 @@
 package doppler
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -58,7 +57,8 @@ func (p *DopplerProvider) Name() string {
 }
 
 // Fetch fetches secrets from Doppler
-func (p *DopplerProvider) Fetch(ctx context.Context, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+func (p *DopplerProvider) Fetch(secretContext provider.SecretContext, mapID string, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+	ctx := secretContext.Ctx
 	// Parse and validate configuration
 	cfg, err := validateConfig(config)
 	if err != nil {
