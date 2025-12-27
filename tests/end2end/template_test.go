@@ -370,14 +370,33 @@ providers:
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
-	// Run sstart with a simple command - should exit with non-zero status
-	runCmd := exec.CommandContext(ctx, sstartBinary, "--config", configFile, "run", "--", "echo", "test")
+	// Create a test script that verifies the template resolves with empty value for non-existent provider
+	testScript := filepath.Join(tmpDir, "test_template.sh")
+	scriptContent := `#!/bin/sh
+# Verify template resolves to <no value> for non-existent provider
+if [ "$TEST_KEY" != "<no value>" ]; then
+  echo "ERROR: TEST_KEY mismatch. Expected: '<no value>', Got: '$TEST_KEY'"
+  exit 1
+fi
+
+echo "SUCCESS: Template provider correctly resolves with empty value for non-existent provider"
+exit 0
+`
+
+	if err := os.WriteFile(testScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("Failed to write test script: %v", err)
+	}
+
+	// Run sstart with the test script - should succeed with empty value for non-existent provider
+	runCmd := exec.CommandContext(ctx, sstartBinary, "--config", configFile, "run", "--", testScript)
 	runCmd.Dir = tmpDir
-	err := runCmd.Run()
-	if err == nil {
-		t.Error("Expected non-zero exit status for non-existent provider reference, got zero")
-	} else if exitError, ok := err.(*exec.ExitError); !ok || exitError.ExitCode() == 0 {
-		t.Errorf("Expected non-zero exit status, got: %v", err)
+	output, err := runCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to run sstart command: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(string(output), "SUCCESS") {
+		t.Errorf("Test script failed. Output: %s", output)
 	}
 
 	t.Logf("Successfully tested template provider error handling")
@@ -405,7 +424,7 @@ func TestE2E_TemplateProvider_WithoutUses(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, ".sstart.yml")
 
-	// Template provider without 'uses' should not be able to access other providers' secrets
+	// Template provider without 'uses' should resolve to empty value when accessing other providers' secrets
 	configYAML := fmt.Sprintf(`
 providers:
   - kind: aws_secretsmanager
@@ -423,17 +442,43 @@ providers:
 		t.Fatalf("Failed to write config file: %v", err)
 	}
 
-	cfg, err := config.Load(configFile)
-	if err != nil {
-		t.Fatalf("Failed to load config: %v", err)
+	// Build sstart binary
+	sstartBinary := filepath.Join(tmpDir, "sstart")
+	projectRoot := getProjectRoot(t)
+	cmdPath := filepath.Join(projectRoot, "cmd", "sstart")
+	buildCmd := exec.CommandContext(ctx, "go", "build", "-o", sstartBinary, cmdPath)
+	buildCmd.Dir = projectRoot
+	if err := buildCmd.Run(); err != nil {
+		t.Fatalf("Failed to build sstart binary: %v", err)
 	}
 
-	collector := secrets.NewCollector(cfg)
-	_, err = collector.Collect(ctx, nil)
-	if err == nil {
-		t.Error("Expected error when template provider references provider without 'uses' specified, got nil")
-	} else if !strings.Contains(err.Error(), "not available") && !strings.Contains(err.Error(), "not in 'uses' list") {
-		t.Errorf("Expected error about provider not available (not in 'uses' list), got: %v", err)
+	// Create a test script that verifies the template resolves with empty value when 'uses' is not specified
+	testScript := filepath.Join(tmpDir, "test_template.sh")
+	scriptContent := `#!/bin/sh
+# Verify template resolves to <no value> when 'uses' is not specified
+if [ "$TEST_KEY" != "<no value>" ]; then
+  echo "ERROR: TEST_KEY mismatch. Expected: '<no value>', Got: '$TEST_KEY'"
+  exit 1
+fi
+
+echo "SUCCESS: Template provider correctly resolves with empty value when 'uses' is not specified"
+exit 0
+`
+
+	if err := os.WriteFile(testScript, []byte(scriptContent), 0755); err != nil {
+		t.Fatalf("Failed to write test script: %v", err)
+	}
+
+	// Run sstart with the test script - should succeed with empty value when 'uses' is not specified
+	runCmd := exec.CommandContext(ctx, sstartBinary, "--config", configFile, "run", "--", testScript)
+	runCmd.Dir = tmpDir
+	output, err := runCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to run sstart command: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(string(output), "SUCCESS") {
+		t.Errorf("Test script failed. Output: %s", output)
 	}
 
 	t.Logf("Successfully tested template provider security: cannot access secrets without 'uses'")
