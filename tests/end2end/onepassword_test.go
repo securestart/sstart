@@ -30,6 +30,9 @@ func getKeys(m map[string]string) []string {
 
 // TestE2E_OnePassword_SectionField tests fetching a field from a section
 func TestE2E_OnePassword_SectionField(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real OnePassword service")
+	}
 	ctx := context.Background()
 
 	// Setup 1Password client
@@ -103,6 +106,9 @@ providers:
 
 // TestE2E_OnePassword_TopLevelField tests fetching a top-level field (not in any section)
 func TestE2E_OnePassword_TopLevelField(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real OnePassword service")
+	}
 	ctx := context.Background()
 
 	// Setup 1Password client
@@ -173,6 +179,9 @@ providers:
 
 // TestE2E_OnePassword_WholeSection tests fetching a whole section from 1Password
 func TestE2E_OnePassword_WholeSection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real OnePassword service")
+	}
 	ctx := context.Background()
 
 	// Setup 1Password client
@@ -257,6 +266,9 @@ providers:
 
 // TestE2E_OnePassword_WholeItem_OnlyTopLevelFields tests fetching a whole item that has only top-level fields (no sections)
 func TestE2E_OnePassword_WholeItem_OnlyTopLevelFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real OnePassword service")
+	}
 	ctx := context.Background()
 
 	// Setup 1Password client
@@ -346,6 +358,9 @@ providers:
 
 // TestE2E_OnePassword_WholeItem tests fetching a whole item from 1Password
 func TestE2E_OnePassword_WholeItem(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real OnePassword service")
+	}
 	ctx := context.Background()
 
 	// Setup 1Password client
@@ -441,6 +456,9 @@ providers:
 
 // TestE2E_OnePassword_WholeItem_NoSectionPrefix tests fetching a whole item without section prefixes
 func TestE2E_OnePassword_WholeItem_NoSectionPrefix(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real OnePassword service")
+	}
 	ctx := context.Background()
 
 	// Setup 1Password client
@@ -516,6 +534,9 @@ providers:
 
 // TestE2E_OnePassword_WholeSection_NoSectionPrefix tests fetching a whole section without section prefix
 func TestE2E_OnePassword_WholeSection_NoSectionPrefix(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real OnePassword service")
+	}
 	ctx := context.Background()
 
 	// Setup 1Password client
@@ -608,6 +629,9 @@ providers:
 
 // TestE2E_OnePassword_SectionField_NoSectionPrefix tests fetching a field from a section without section prefix
 func TestE2E_OnePassword_SectionField_NoSectionPrefix(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real OnePassword service")
+	}
 	ctx := context.Background()
 
 	// Setup 1Password client

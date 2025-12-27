@@ -233,6 +233,9 @@ providers:
 
 // TestE2E_MultiProvider_All tests all providers together including GCSM
 func TestE2E_MultiProvider_All(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Google Cloud Secret Manager service")
+	}
 	ctx := context.Background()
 
 	// Setup containers

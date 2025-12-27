@@ -14,6 +14,9 @@ import (
 
 // TestE2E_GCSM_WithKeys tests the GCSM provider using real Google Cloud Secret Manager API with key mappings
 func TestE2E_GCSM_WithKeys(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Google Cloud Secret Manager service")
+	}
 	ctx := context.Background()
 
 	// Setup GCSM client (uses real API, requires credentials)
@@ -98,6 +101,9 @@ providers:
 
 // TestE2E_GCSM_NoKeys tests the GCSM provider using real Google Cloud Secret Manager API without key mappings
 func TestE2E_GCSM_NoKeys(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Google Cloud Secret Manager service")
+	}
 	ctx := context.Background()
 
 	// Setup GCSM client (uses real API, requires credentials)

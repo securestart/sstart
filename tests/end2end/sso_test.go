@@ -141,6 +141,9 @@ func TestE2E_SSO_OIDCClient_TokenStorage(t *testing.T) {
 // TestE2E_SSO_ClientCredentialsFlow tests the client credentials flow for non-interactive authentication
 // This test requires a confidential client with client_credentials grant type enabled
 func TestE2E_SSO_ClientCredentialsFlow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real OIDC provider")
+	}
 	ctx := context.Background()
 
 	// Get SSO configuration from environment
@@ -261,6 +264,9 @@ providers:
 
 // TestE2E_SSO_ClientCredentialsFlow_WithCustomAuthMount tests client credentials with a custom JWT auth mount path
 func TestE2E_SSO_ClientCredentialsFlow_WithCustomAuthMount(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real OIDC provider")
+	}
 	ctx := context.Background()
 
 	// Get SSO configuration from environment

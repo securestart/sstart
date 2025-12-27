@@ -20,6 +20,9 @@ import (
 
 // TestE2E_Bitwarden_CLI_FieldsFormat tests the personal Bitwarden provider with fields format
 func TestE2E_Bitwarden_CLI_FieldsFormat(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Bitwarden service")
+	}
 	ctx := context.Background()
 
 	// Setup Bitwarden CLI (login, unlock, start bw serve)
@@ -98,6 +101,9 @@ providers:
 
 // TestE2E_Bitwarden_CLI_NoteFormat tests the personal Bitwarden provider with note format
 func TestE2E_Bitwarden_CLI_NoteFormat(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Bitwarden service")
+	}
 	ctx := context.Background()
 
 	// Setup Bitwarden CLI (login, unlock, start bw serve)
@@ -176,6 +182,9 @@ providers:
 // TestE2E_Bitwarden_CLI_BothFormat tests the personal Bitwarden provider with both format
 // This tests that fields take precedence over notes when there are duplicate keys
 func TestE2E_Bitwarden_CLI_BothFormat(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Bitwarden service")
+	}
 	ctx := context.Background()
 
 	// Setup Bitwarden CLI (login, unlock, start bw serve)

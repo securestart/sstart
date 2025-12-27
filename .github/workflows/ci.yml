@@ -13,9 +13,8 @@ permissions:
 
 jobs:
   test:
-    name: Run End-to-End Tests
+    name: Run short test
     runs-on: ubuntu-latest
-    environment: end2end
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -25,150 +24,21 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Setup env via sstart
-        uses: dirathea/setup-sstart-env@main
-        env:
-          INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET }}
-          INFISICAL_UNIVERSAL_AUTH_CLIENT_ID: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_ID }}
-          INFISICAL_SITE_URL: https://eu.infisical.com
-        with:
-          config: |
-            providers:
-              - kind: infisical
-                project_id: 8aded323-e110-4f48-9c7f-24c275358609
-                environment: prod
-                path: /github
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Install Bitwarden CLI
-        run: |
-          BW_DOWNLOAD_URL=$(curl -s https://api.github.com/repos/bitwarden/cli/releases/latest | grep '"browser_download_url".*linux.*zip' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          curl -L "${BW_DOWNLOAD_URL}" -o bw.zip
-          unzip -q bw.zip
-          chmod +x bw
-          sudo mv bw /usr/local/bin/
-          rm bw.zip
-          bw --version
-
-      - name: Determine which tests to run
-        id: test_filter
-        uses: actions/github-script@v7
-        with:
-          script: |
-            try {
-              const { data: files } = await github.rest.pulls.listFiles({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: context.issue.number,
-              });
-              
-              const changedFiles = files.map(f => f.filename);
-              console.log('Changed files:', changedFiles);
-              
-            // Map provider directories to test name prefixes
-            const providerTestMap = {
-              'internal/provider/aws/': ['TestE2E_AWSSecretsManager'],
-              'internal/provider/azurekeyvault/': ['TestE2E_AzureKeyVault'],
-              'internal/provider/bitwarden/': ['TestE2E_Bitwarden', 'TestE2E_BitwardenSM'],
-              'internal/provider/doppler/': ['TestE2E_Doppler'],
-              'internal/provider/gcsm/': ['TestE2E_GCSM'],
-              'internal/provider/infisical/': ['TestE2E_Infisical'],
-              'internal/provider/onepassword/': ['TestE2E_OnePassword'],
-              'internal/provider/vault/': ['TestE2E_Vault', 'TestE2E_OpenBao'],
-              'internal/oidc/': ['TestE2E_SSO'],
-            };
-              
-              // Core files that require all tests
-              const corePaths = [
-                'internal/secrets/',
-                'internal/config/',
-                'internal/app/',
-                'internal/cli/',
-                'tests/end2end/',
-                'cmd/',
-              ];
-              
-              // Check if any core files changed
-              const hasCoreChanges = changedFiles.some(file => 
-                corePaths.some(path => file.startsWith(path))
-              );
-              
-              if (hasCoreChanges) {
-                console.log('Core files changed, running all tests');
-                core.setOutput('test_filter', '');
-                core.setOutput('run_all_tests', 'true');
-                core.setOutput('skip_tests', 'false');
-                return;
-              }
-              
-              // Find which providers changed
-              const affectedTests = new Set();
-              
-              for (const file of changedFiles) {
-                for (const [providerPath, testNames] of Object.entries(providerTestMap)) {
-                  if (file.startsWith(providerPath)) {
-                    testNames.forEach(test => affectedTests.add(test));
-                  }
-                }
-              }
-              
-              if (affectedTests.size === 0) {
-                console.log('No provider changes detected, skipping end2end tests');
-                core.setOutput('test_filter', '');
-                core.setOutput('run_all_tests', 'false');
-                core.setOutput('skip_tests', 'true');
-                return;
-              }
-              
-              // Construct test filter regex (matches any of the affected tests)
-              // Format: TestE2E_(Provider1|Provider2) for go test -run flag
-              const testFilter = Array.from(affectedTests).join('|');
-              console.log('Running selective tests:', testFilter);
-              core.setOutput('test_filter', testFilter);
-              core.setOutput('run_all_tests', 'false');
-              core.setOutput('skip_tests', 'false');
-            } catch (error) {
-              console.log('Error determining test filter, running all tests:', error.message);
-              core.setOutput('test_filter', '');
-              core.setOutput('run_all_tests', 'true');
-              core.setOutput('skip_tests', 'false');
-            }
-
-      - name: Run end-to-end tests
-        if: steps.test_filter.outputs.skip_tests != 'true'
+      - name: Run tests in short mode
         env:
           CGO_LDFLAGS: -lm
-          # the rest of env supplied by setup-sstart-env
         run: |
-          go install gotest.tools/gotestsum
-          if [ "${{ steps.test_filter.outputs.run_all_tests }}" = "true" ]; then
-            echo "Running all end-to-end tests"
-            gotestsum --junitfile test-results.xml --format testname -- ./tests/end2end/...
-          else
-            echo "Running selective tests: ${{ steps.test_filter.outputs.test_filter }}"
-            gotestsum --junitfile test-results.xml --format testname -- -run "${{ steps.test_filter.outputs.test_filter }}" ./tests/end2end/...
-          fi
+          echo "Running tests in short mode"
+          gotestsum --junitfile test-results.xml --format testname -- -short ./tests/end2end/...
 
       - name: Publish test results
-        if: always() && steps.test_filter.outputs.skip_tests != 'true'
+        if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           files: test-results.xml
-          check_name: End-to-End Test Results
+          check_name: CI Test Results
           fail_on: 'nothing'
           comment_mode: off
-      
-      - name: Skip end-to-end tests
-        if: steps.test_filter.outputs.skip_tests == 'true'
-        run: |
-          echo "No provider changes detected. Skipping end-to-end tests."
 
   build:
     name: Build

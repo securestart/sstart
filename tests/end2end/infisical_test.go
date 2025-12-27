@@ -22,6 +22,9 @@ import (
 
 // TestE2E_Infisical_WithKeys tests the Infisical provider with key mappings
 func TestE2E_Infisical_WithKeys(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Infisical service")
+	}
 	ctx := context.Background()
 
 	// Setup Infisical client
@@ -114,6 +117,9 @@ providers:
 
 // TestE2E_Infisical_NoKeys tests the Infisical provider without key mappings
 func TestE2E_Infisical_NoKeys(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Infisical service")
+	}
 	ctx := context.Background()
 
 	// Setup Infisical client
@@ -202,6 +208,9 @@ providers:
 
 // TestE2E_Infisical_WithOptionalParams tests the Infisical provider with optional parameters
 func TestE2E_Infisical_WithOptionalParams(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Infisical service")
+	}
 	ctx := context.Background()
 
 	// Setup Infisical client
@@ -268,6 +277,9 @@ providers:
 
 // TestE2E_Infisical_VerifySecretExists tests that the test setup can verify secrets exist
 func TestE2E_Infisical_VerifySecretExists(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Infisical service")
+	}
 	ctx := context.Background()
 
 	// Setup Infisical client

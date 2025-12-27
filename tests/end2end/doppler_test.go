@@ -21,6 +21,9 @@ import (
 
 // TestE2E_Doppler_WithKeys tests the Doppler provider with key mappings
 func TestE2E_Doppler_WithKeys(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Doppler service")
+	}
 	ctx := context.Background()
 
 	// Setup Doppler client
@@ -113,6 +116,9 @@ providers:
 
 // TestE2E_Doppler_NoKeys tests the Doppler provider without key mappings
 func TestE2E_Doppler_NoKeys(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Doppler service")
+	}
 	ctx := context.Background()
 
 	// Setup Doppler client

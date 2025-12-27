@@ -23,6 +23,9 @@ import (
 
 // TestE2E_BitwardenSM tests the Bitwarden Secret Manager provider
 func TestE2E_BitwardenSM(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that requires real Bitwarden Secret Manager service")
+	}
 	ctx := context.Background()
 
 	// Get server URL from environment or use default

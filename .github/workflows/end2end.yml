@@ -1,0 +1,76 @@
+name: End-to-End Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - main
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  test:
+    name: Run End-to-End Tests
+    runs-on: ubuntu-latest
+    environment: end2end
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup env via sstart
+        uses: dirathea/setup-sstart-env@main
+        env:
+          INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET }}
+          INFISICAL_UNIVERSAL_AUTH_CLIENT_ID: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_ID }}
+          INFISICAL_SITE_URL: https://eu.infisical.com
+        with:
+          config: |
+            providers:
+              - kind: infisical
+                project_id: 8aded323-e110-4f48-9c7f-24c275358609
+                environment: prod
+                path: /github
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install Bitwarden CLI
+        run: |
+          BW_DOWNLOAD_URL=$(curl -s https://api.github.com/repos/bitwarden/cli/releases/latest | grep '"browser_download_url".*linux.*zip' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          curl -L "${BW_DOWNLOAD_URL}" -o bw.zip
+          unzip -q bw.zip
+          chmod +x bw
+          sudo mv bw /usr/local/bin/
+          rm bw.zip
+          bw --version
+
+      - name: Run all end-to-end tests
+        env:
+          CGO_LDFLAGS: -lm
+          # the rest of env supplied by setup-sstart-env
+        run: |
+          go install gotest.tools/gotestsum
+          echo "Running all end-to-end tests (including tests that require real services)"
+          gotestsum --junitfile test-results.xml --format testname -- ./tests/end2end/...
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: test-results.xml
+          check_name: End-to-End Test Results
+          fail_on: 'nothing'
+          comment_mode: off
+
