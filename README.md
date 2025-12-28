@@ -19,6 +19,7 @@ You define all your required secrets from all your sources in a single, declarat
 
 - 🔐 **Multiple Secret Providers**: Support for 1Password, AWS Secrets Manager, Azure Key Vault, Bitwarden, Doppler, HashiCorp Vault, GCP Secret Manager, dotenv files, and more
 - 🔄 **Combine Secrets**: Merge secrets from multiple providers
+- 🧩 **Template Providers**: Construct new secrets by combining values from other providers using Go template syntax (e.g., build database URIs from separate credentials)
 - 🚀 **Subprocess Execution**: Automatically inject secrets into subprocesses
 - 🔒 **Secure by Default**: Secrets never appear in shell history or logs
 - ⚙️ **YAML Configuration**: Easy-to-use configuration file
@@ -45,12 +46,6 @@ sudo mv sstart /usr/local/bin/
 ```bash
 curl -L https://github.com/dirathea/sstart/releases/latest/download/sstart_Darwin_arm64.tar.gz | tar -xz
 sudo mv sstart /usr/local/bin/
-```
-
-**Windows:**
-```powershell
-# Download and extract from https://github.com/dirathea/sstart/releases/latest
-# Add sstart.exe to your PATH
 ```
 
 **Using a specific version:**
@@ -157,6 +152,7 @@ See [CONFIGURATION.md](CONFIGURATION.md) for complete configuration documentatio
 - Configuration file structure
 - All supported providers and their options
 - Authentication methods
+- Template providers for constructing secrets from other providers
 - Template variables
 - Multiple provider setup
 - Key mappings
@@ -174,6 +170,33 @@ sstart run -- node index.js
 ```bash
 docker run --rm -it --env-file <(sstart env) node:18-alpine sh
 ```
+
+### Using Template Providers
+
+Construct new secrets by combining values from other providers:
+
+```yaml
+providers:
+  # Fetch database credentials from AWS Secrets Manager
+  - kind: aws_secretsmanager
+    id: db_creds
+    secret_id: rds/prod/credentials
+  
+  # Fetch database host from another source
+  - kind: aws_secretsmanager
+    id: db_config
+    secret_id: rds/config
+  
+  # Build database URI using template provider
+  - kind: template
+    uses:
+      - db_creds
+      - db_config
+    templates:
+      DATABASE_URI: postgresql://{{.db_creds.DB_USER}}:{{.db_creds.DB_PASSWORD}}@{{.db_config.DB_HOST}}:{{.db_config.DB_PORT}}/{{.db_config.DB_NAME}}
+```
+
+Template syntax uses `{{.<provider_id>.<secret_key>}}` notation (similar to Helm templates). See [CONFIGURATION.md](CONFIGURATION.md) for more details.
 
 
 ## Security
