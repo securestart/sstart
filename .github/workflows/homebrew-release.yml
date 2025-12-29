@@ -16,6 +16,10 @@ jobs:
           homebrew_tap: homebrew-tap
           formula_folder: Formula
           github_token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          target_darwin_amd64: https://github.com/securestart/sstart/releases/download/${{ github.event.release.tag_name }}/sstart_Darwin_x86_64.tar.gz
+          target_darwin_arm64: https://github.com/securestart/sstart/releases/download/${{ github.event.release.tag_name }}/sstart_Darwin_arm64.tar.gz
+          target_linux_amd64: https://github.com/securestart/sstart/releases/download/${{ github.event.release.tag_name }}/sstart_Linux_x86_64.tar.gz
+          target_linux_arm64: https://github.com/securestart/sstart/releases/download/${{ github.event.release.tag_name }}/sstart_Linux_arm64.tar.gz
 
           # Specifics for sstart
           install: 'bin.install Dir["**/sstart"][0] => "sstart"'
