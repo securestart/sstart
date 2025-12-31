@@ -18,7 +18,7 @@ require (
 	github.com/hashicorp/vault/api v1.22.0
 	github.com/infisical/go-sdk v0.6.2
 	github.com/joho/godotenv v1.5.1
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/localstack v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/vault v0.40.0
