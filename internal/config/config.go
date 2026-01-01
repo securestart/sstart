@@ -128,8 +128,7 @@ type ProviderConfig struct {
 	Config map[string]interface{} `yaml:"-"`              // Provider-specific configuration (e.g., path, region, endpoint, etc.)
 	Keys   map[string]string      `yaml:"keys,omitempty"` // Optional key mappings (source_key: target_key, or "==" to keep same name)
 	Env    EnvVars                `yaml:"env,omitempty"`
-	Uses   []string               `yaml:"uses,omitempty"`  // Optional list of provider IDs to depend on
-	Cache  *bool                  `yaml:"cache,omitempty"` // Optional: override global cache setting for this provider
+	Uses   []string               `yaml:"uses,omitempty"` // Optional list of provider IDs to depend on
 }
 
 // UnmarshalYAML implements custom YAML unmarshaling to capture provider-specific fields
@@ -179,11 +178,6 @@ func (p *ProviderConfig) UnmarshalYAML(unmarshal func(interface{}) error) error 
 			}
 		}
 		delete(raw, "uses")
-	}
-
-	if cache, ok := raw["cache"].(bool); ok {
-		p.Cache = &cache
-		delete(raw, "cache")
 	}
 
 	// Everything else goes into Config
@@ -308,21 +302,4 @@ func (c *Config) GetCacheTTL() time.Duration {
 		return 0
 	}
 	return c.Cache.TTL
-}
-
-// IsCacheEnabledForProvider returns whether caching is enabled for a specific provider.
-// Provider-level setting overrides global setting.
-func (c *Config) IsCacheEnabledForProvider(providerID string) bool {
-	provider, err := c.GetProvider(providerID)
-	if err != nil {
-		return false
-	}
-
-	// Provider-level cache setting overrides global
-	if provider.Cache != nil {
-		return *provider.Cache
-	}
-
-	// Fall back to global setting
-	return c.IsCacheEnabled()
 }

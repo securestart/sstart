@@ -57,9 +57,8 @@ func NewCollector(cfg *config.Config, opts ...CollectorOption) *Collector {
 		}
 	}
 
-	// Initialize cache if any caching is potentially needed
-	// Cache is created if global cache is enabled OR if any provider has cache override
-	if cfg.IsCacheEnabled() || hasAnyCacheOverride(cfg) {
+	// Initialize cache if enabled
+	if cfg.IsCacheEnabled() {
 		cacheOpts := []cache.Option{}
 		if ttl := cfg.GetCacheTTL(); ttl > 0 {
 			cacheOpts = append(cacheOpts, cache.WithTTL(ttl))
@@ -98,14 +97,11 @@ func (c *Collector) Collect(ctx context.Context, providerIDs []string) (provider
 		// Expand template variables in config (e.g., in path fields)
 		expandedConfig := expandConfigTemplates(providerCfg.Config)
 
-		// Check if caching is enabled for this provider
-		cacheEnabled := c.config.IsCacheEnabledForProvider(providerID)
-
 		// Generate cache key based on provider configuration
 		cacheKey := cache.GenerateCacheKey(providerID, providerCfg.Kind, expandedConfig)
 
 		// Try to get secrets from cache if enabled
-		if cacheEnabled && c.cache != nil {
+		if c.cache != nil {
 			if cachedSecrets, found := c.cache.Get(cacheKey); found {
 				// Use cached secrets
 				providerSecrets[providerID] = cachedSecrets
@@ -150,8 +146,8 @@ func (c *Collector) Collect(ctx context.Context, providerIDs []string) (provider
 			providerSecrets[providerID][kv.Key] = kv.Value
 		}
 
-		// Cache the secrets if caching is enabled for this provider
-		if cacheEnabled && c.cache != nil {
+		// Cache the secrets if caching is enabled
+		if c.cache != nil {
 			_ = c.cache.Set(cacheKey, providerSecrets[providerID])
 		}
 
@@ -299,16 +295,6 @@ func Mask(value string) string {
 		return value[:2] + "****"
 	}
 	return value[:2] + "****" + value[len(value)-2:]
-}
-
-// hasAnyCacheOverride checks if any provider has an explicit cache override set to true
-func hasAnyCacheOverride(cfg *config.Config) bool {
-	for _, p := range cfg.Providers {
-		if p.Cache != nil && *p.Cache {
-			return true
-		}
-	}
-	return false
 }
 
 // ClearCache clears all cached secrets

@@ -787,7 +787,7 @@ sstart supports caching secrets to reduce API calls to secret providers. When ca
 
 ### Configuration
 
-Enable caching globally with the `cache` configuration:
+Enable caching with the `cache` configuration:
 
 ```yaml
 cache:
@@ -797,35 +797,11 @@ cache:
 providers:
   - kind: aws_secretsmanager
     secret_id: myapp/production
-```
-
-### Per-Provider Cache Control
-
-You can override the global cache setting for individual providers:
-
-```yaml
-cache:
-  enabled: true
-  ttl: 10m
-
-providers:
-  # This provider uses the global cache setting (enabled)
-  - kind: aws_secretsmanager
-    id: aws-prod
-    secret_id: myapp/production
-  
-  # This provider disables caching (always fetch fresh)
   - kind: vault
-    id: vault-secrets
     path: secret/myapp
-    cache: false
-  
-  # This provider enables caching even if global cache is disabled
-  - kind: dotenv
-    id: local-env
-    path: .env
-    cache: true
 ```
+
+When enabled, all providers will use the cache. The TTL applies globally to all cached secrets.
 
 ### Storage
 
