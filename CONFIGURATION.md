@@ -805,9 +805,9 @@ When enabled, all providers will use the cache. The TTL applies globally to all 
 
 ### Storage
 
-Secrets are cached using:
-1. **System Keyring** (preferred): Uses the OS-native secure storage (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-2. **File Fallback**: If keyring is unavailable, falls back to `~/.config/sstart/secrets-cache.json` with secure permissions (0600)
+Secrets are cached using the **System Keyring** (macOS Keychain, Windows Credential Manager, Linux Secret Service).
+
+If the system keyring is not available, caching is silently disabled and secrets are fetched from providers on every run.
 
 ### Cache Key Generation
 
@@ -827,7 +827,6 @@ This ensures that different provider configurations are cached separately, and c
 ### Security Considerations
 
 - Cached secrets are stored in the system keyring, which provides OS-level encryption
-- The file fallback uses restrictive permissions (owner read/write only)
 - Cache is automatically invalidated when TTL expires
 - SSO tokens are excluded from cache key generation to ensure proper token refresh
 

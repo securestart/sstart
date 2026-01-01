@@ -15,11 +15,19 @@ import (
 
 // TestE2E_Cache_BasicCaching tests that secrets are cached and reused
 func TestE2E_Cache_BasicCaching(t *testing.T) {
+	// Skip if keyring not available
+	testCache := cache.New()
+	if !testCache.IsAvailable() {
+		t.Skip("keyring not available, skipping cache test")
+	}
+
+	// Clean up any existing cache
+	_ = testCache.Clear()
+
 	// Create temp directory for test files
 	tmpDir := t.TempDir()
 	envFile := filepath.Join(tmpDir, ".env")
 	configFile := filepath.Join(tmpDir, ".sstart.yml")
-	cacheFile := filepath.Join(tmpDir, "cache.json")
 
 	// Create initial .env file
 	initialEnv := "API_KEY=initial-secret\nDB_PASS=initial-password\n"
@@ -53,14 +61,8 @@ providers:
 		t.Fatal("Expected cache to be enabled")
 	}
 
-	// Create collector - inject custom cache path for isolation
+	// Create collector
 	collector := secrets.NewCollector(cfg)
-	if collector.GetCache() != nil {
-		// Override cache path for test isolation
-		testCache := cache.New(cache.WithCachePath(cacheFile), cache.WithTTL(time.Minute))
-		// We need to use the collector's cache, but set up file-based for testing
-		testCache.Clear() // Ensure clean state
-	}
 
 	// First collection - should fetch from provider
 	ctx := context.Background()
@@ -96,6 +98,9 @@ providers:
 	if secretsResult2["DB_PASS"] != "initial-password" {
 		t.Errorf("Expected cached DB_PASS=initial-password, got %s (cache not working)", secretsResult2["DB_PASS"])
 	}
+
+	// Clean up
+	_ = testCache.Clear()
 }
 
 // TestE2E_Cache_Disabled tests that caching can be disabled
@@ -162,6 +167,15 @@ providers:
 
 // TestE2E_Cache_TTLExpiration tests that cache expires after TTL
 func TestE2E_Cache_TTLExpiration(t *testing.T) {
+	// Skip if keyring not available
+	testCache := cache.New()
+	if !testCache.IsAvailable() {
+		t.Skip("keyring not available, skipping cache test")
+	}
+
+	// Clean up any existing cache
+	_ = testCache.Clear()
+
 	tmpDir := t.TempDir()
 	envFile := filepath.Join(tmpDir, ".env")
 	configFile := filepath.Join(tmpDir, ".sstart.yml")
@@ -219,6 +233,9 @@ providers:
 	if secrets2["DATA"] != "second" {
 		t.Errorf("Expected fresh DATA=second after TTL expiry, got %s", secrets2["DATA"])
 	}
+
+	// Clean up
+	_ = testCache.Clear()
 }
 
 // TestE2E_Cache_ConfigParsing tests cache configuration parsing

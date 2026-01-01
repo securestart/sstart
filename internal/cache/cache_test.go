@@ -1,8 +1,7 @@
 package cache
 
 import (
-	"os"
-	"path/filepath"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -87,11 +86,15 @@ func TestGenerateCacheKey_SSOTokensIgnored(t *testing.T) {
 }
 
 func TestCache_SetAndGet(t *testing.T) {
-	// Create a temporary directory for file-based cache
-	tmpDir := t.TempDir()
-	cachePath := filepath.Join(tmpDir, "cache.json")
+	cache := New(WithTTL(time.Minute))
 
-	cache := New(WithCachePath(cachePath), WithTTL(time.Minute))
+	// Skip if keyring not available
+	if !cache.IsAvailable() {
+		t.Skip("keyring not available")
+	}
+
+	// Clean up before test
+	_ = cache.Clear()
 
 	secrets := map[string]string{
 		"API_KEY":     "secret123",
@@ -121,20 +124,24 @@ func TestCache_SetAndGet(t *testing.T) {
 			t.Errorf("expected %s=%s, got %s=%s", k, v, k, cached[k])
 		}
 	}
+
+	// Clean up
+	_ = cache.Clear()
 }
 
 func TestCache_Expiration(t *testing.T) {
-	tmpDir := t.TempDir()
-	cachePath := filepath.Join(tmpDir, "cache.json")
-
 	// Use a very short TTL
-	c := New(WithCachePath(cachePath), WithTTL(50*time.Millisecond))
-	// Force file-based cache for isolation
-	c.keyringTested = true
-	c.keyringDisabled = true
+	c := New(WithTTL(100 * time.Millisecond))
+
+	// Skip if keyring not available
+	if !c.IsAvailable() {
+		t.Skip("keyring not available")
+	}
+
+	// Use unique key to avoid conflicts with other tests
+	cacheKey := fmt.Sprintf("expiring-key-%d", time.Now().UnixNano())
 
 	secrets := map[string]string{"KEY": "value"}
-	cacheKey := "expiring-key"
 
 	err := c.Set(cacheKey, secrets)
 	if err != nil {
@@ -148,7 +155,7 @@ func TestCache_Expiration(t *testing.T) {
 	}
 
 	// Wait for expiration
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(150 * time.Millisecond)
 
 	// Should be expired now
 	_, found = c.Get(cacheKey)
@@ -158,10 +165,12 @@ func TestCache_Expiration(t *testing.T) {
 }
 
 func TestCache_Clear(t *testing.T) {
-	tmpDir := t.TempDir()
-	cachePath := filepath.Join(tmpDir, "cache.json")
+	cache := New()
 
-	cache := New(WithCachePath(cachePath))
+	// Skip if keyring not available
+	if !cache.IsAvailable() {
+		t.Skip("keyring not available")
+	}
 
 	secrets := map[string]string{"KEY": "value"}
 	cacheKey := "clear-test-key"
@@ -188,10 +197,15 @@ func TestCache_Clear(t *testing.T) {
 }
 
 func TestCache_ClearProvider(t *testing.T) {
-	tmpDir := t.TempDir()
-	cachePath := filepath.Join(tmpDir, "cache.json")
+	cache := New()
 
-	cache := New(WithCachePath(cachePath))
+	// Skip if keyring not available
+	if !cache.IsAvailable() {
+		t.Skip("keyring not available")
+	}
+
+	// Clean up before test
+	_ = cache.Clear()
 
 	secrets1 := map[string]string{"KEY1": "value1"}
 	secrets2 := map[string]string{"KEY2": "value2"}
@@ -216,74 +230,96 @@ func TestCache_ClearProvider(t *testing.T) {
 	if !found {
 		t.Error("expected provider2 to still exist")
 	}
+
+	// Clean up
+	_ = cache.Clear()
 }
 
 func TestCache_CleanExpired(t *testing.T) {
-	tmpDir := t.TempDir()
-	cachePath := filepath.Join(tmpDir, "cache.json")
+	c := New(WithTTL(50 * time.Millisecond))
 
-	cache := New(WithCachePath(cachePath), WithTTL(50*time.Millisecond))
+	// Skip if keyring not available
+	if !c.IsAvailable() {
+		t.Skip("keyring not available")
+	}
+
+	// Clean up before test
+	_ = c.Clear()
 
 	secrets := map[string]string{"KEY": "value"}
-	_ = cache.Set("expiring", secrets)
+	_ = c.Set("expiring", secrets)
 
 	// Wait for expiration
 	time.Sleep(100 * time.Millisecond)
 
-	// Add a fresh entry
-	cache2 := New(WithCachePath(cachePath), WithTTL(time.Hour))
-	_ = cache2.Set("fresh", map[string]string{"KEY2": "value2"})
+	// Add a fresh entry with longer TTL
+	c2 := New(WithTTL(time.Hour))
+	_ = c2.Set("fresh", map[string]string{"KEY2": "value2"})
 
 	// Clean expired
-	err := cache2.CleanExpired()
+	err := c2.CleanExpired()
 	if err != nil {
 		t.Fatalf("failed to clean expired: %v", err)
 	}
 
 	// Expired should be gone
-	_, found := cache2.Get("expiring")
+	_, found := c2.Get("expiring")
 	if found {
 		t.Error("expected expired entry to be cleaned")
 	}
 
 	// Fresh should still exist
-	_, found = cache2.Get("fresh")
+	_, found = c2.Get("fresh")
 	if !found {
 		t.Error("expected fresh entry to still exist")
 	}
+
+	// Clean up
+	_ = c2.Clear()
 }
 
 func TestCache_Stats(t *testing.T) {
-	tmpDir := t.TempDir()
-	cachePath := filepath.Join(tmpDir, "cache.json")
+	// Skip if keyring not available
+	c := New()
+	if !c.IsAvailable() {
+		t.Skip("keyring not available")
+	}
 
-	c := New(WithCachePath(cachePath), WithTTL(50*time.Millisecond))
-	// Force file-based cache for isolation
-	c.keyringTested = true
-	c.keyringDisabled = true
+	// Clean up before test to get fresh state
+	_ = c.Clear()
 
 	// Initially empty
 	total, valid, expired := c.Stats()
-	if total != 0 || valid != 0 || expired != 0 {
-		t.Errorf("expected empty stats, got total=%d, valid=%d, expired=%d", total, valid, expired)
+	if total != 0 {
+		t.Errorf("expected empty stats after clear, got total=%d", total)
 	}
 
-	// Add entries
-	_ = c.Set("key1", map[string]string{"K": "V"})
-	_ = c.Set("key2", map[string]string{"K": "V"})
+	// Use short-lived cache for this test
+	shortCache := New(WithTTL(150 * time.Millisecond))
 
-	total, valid, expired = c.Stats()
-	if total != 2 || valid != 2 || expired != 0 {
-		t.Errorf("expected 2 valid entries, got total=%d, valid=%d, expired=%d", total, valid, expired)
+	// Use unique keys
+	key1 := fmt.Sprintf("stats-key1-%d", time.Now().UnixNano())
+	key2 := fmt.Sprintf("stats-key2-%d", time.Now().UnixNano())
+
+	// Add entries quickly
+	_ = shortCache.Set(key1, map[string]string{"K": "V"})
+	_ = shortCache.Set(key2, map[string]string{"K": "V"})
+
+	total, valid, expired = shortCache.Stats()
+	if valid != 2 {
+		t.Errorf("expected 2 valid entries immediately after set, got valid=%d, expired=%d", valid, expired)
 	}
 
 	// Wait for expiration
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 
-	total, valid, expired = c.Stats()
-	if total != 2 || valid != 0 || expired != 2 {
-		t.Errorf("expected 2 expired entries, got total=%d, valid=%d, expired=%d", total, valid, expired)
+	total, valid, expired = shortCache.Stats()
+	if expired != 2 {
+		t.Errorf("expected 2 expired entries after TTL, got valid=%d, expired=%d", valid, expired)
 	}
+
+	// Clean up
+	_ = c.Clear()
 }
 
 func TestCache_GetTTL(t *testing.T) {
@@ -298,94 +334,51 @@ func TestCache_GetTTL(t *testing.T) {
 	}
 }
 
-func TestCache_FileFallback(t *testing.T) {
-	tmpDir := t.TempDir()
-	cachePath := filepath.Join(tmpDir, "cache.json")
+func TestCache_IsAvailable(t *testing.T) {
+	cache := New()
+	// Just verify the method doesn't panic
+	_ = cache.IsAvailable()
+}
 
-	cache := New(WithCachePath(cachePath))
-	// Force disable keyring for this test
+func TestCache_KeyringNotAvailable(t *testing.T) {
+	cache := New()
+	// Force keyring to be disabled
 	cache.keyringTested = true
 	cache.keyringDisabled = true
 
-	secrets := map[string]string{"KEY": "value"}
-	err := cache.Set("file-test", secrets)
+	// All operations should gracefully handle unavailable keyring
+	// Get should return not found (forcing provider fetch)
+	_, found := cache.Get("any-key")
+	if found {
+		t.Error("expected not found when keyring unavailable")
+	}
+
+	// Set should silently succeed (no-op)
+	err := cache.Set("any-key", map[string]string{"K": "V"})
 	if err != nil {
-		t.Fatalf("failed to set cache with file fallback: %v", err)
+		t.Errorf("expected no error when setting with keyring unavailable, got %v", err)
 	}
 
-	// Check that file was created
-	if _, err := os.Stat(cachePath); os.IsNotExist(err) {
-		t.Error("expected cache file to be created")
+	// Get should still return not found (nothing was actually cached)
+	_, found = cache.Get("any-key")
+	if found {
+		t.Error("expected not found after set when keyring unavailable")
 	}
 
-	// Should be able to read back
-	cached, found := cache.Get("file-test")
-	if !found {
-		t.Fatal("expected to find cached secrets from file")
-	}
-
-	if cached["KEY"] != "value" {
-		t.Errorf("expected KEY=value, got KEY=%s", cached["KEY"])
-	}
-}
-
-func TestCache_CorruptedCacheFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	cachePath := filepath.Join(tmpDir, "cache.json")
-
-	// Create a cache file with empty JSON (no providers key)
-	if err := os.WriteFile(cachePath, []byte("{}"), 0600); err != nil {
-		t.Fatalf("failed to write corrupted cache file: %v", err)
-	}
-
-	c := New(WithCachePath(cachePath))
-	c.keyringTested = true
-	c.keyringDisabled = true
-
-	// This should NOT panic even with corrupted cache file
-	secrets := map[string]string{"KEY": "value"}
-	err := c.Set("test-key", secrets)
+	// Clear should not error
+	err = cache.Clear()
 	if err != nil {
-		t.Fatalf("failed to set cache with corrupted file: %v", err)
+		t.Errorf("expected no error on clear, got %v", err)
 	}
 
-	// Should be able to read back
-	cached, found := c.Get("test-key")
-	if !found {
-		t.Fatal("expected to find cached secrets")
+	// Stats should return zeros
+	total, valid, expired := cache.Stats()
+	if total != 0 || valid != 0 || expired != 0 {
+		t.Errorf("expected zero stats, got total=%d, valid=%d, expired=%d", total, valid, expired)
 	}
 
-	if cached["KEY"] != "value" {
-		t.Errorf("expected KEY=value, got KEY=%s", cached["KEY"])
-	}
-}
-
-func TestCache_NullProvidersInFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	cachePath := filepath.Join(tmpDir, "cache.json")
-
-	// Create a cache file with null providers
-	if err := os.WriteFile(cachePath, []byte(`{"providers": null}`), 0600); err != nil {
-		t.Fatalf("failed to write cache file: %v", err)
-	}
-
-	c := New(WithCachePath(cachePath))
-	c.keyringTested = true
-	c.keyringDisabled = true
-
-	// This should NOT panic
-	secrets := map[string]string{"KEY": "value"}
-	err := c.Set("test-key", secrets)
-	if err != nil {
-		t.Fatalf("failed to set cache: %v", err)
-	}
-
-	cached, found := c.Get("test-key")
-	if !found {
-		t.Fatal("expected to find cached secrets")
-	}
-
-	if cached["KEY"] != "value" {
-		t.Errorf("expected KEY=value, got KEY=%s", cached["KEY"])
+	// IsAvailable should return false
+	if cache.IsAvailable() {
+		t.Error("expected IsAvailable to return false")
 	}
 }

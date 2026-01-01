@@ -7,8 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"time"
 
@@ -18,10 +16,6 @@ import (
 const (
 	// KeyringService is the service name used for keyring storage
 	KeyringService = "sstart-cache"
-	// ConfigDirName is the name of the directory where sstart stores its configuration
-	ConfigDirName = "sstart"
-	// CacheFileName is the name of the cache file (fallback)
-	CacheFileName = "secrets-cache.json"
 	// DefaultTTL is the default cache TTL (5 minutes)
 	DefaultTTL = 5 * time.Minute
 )
@@ -43,7 +37,6 @@ type Cache struct {
 	ttl             time.Duration
 	keyringDisabled bool
 	keyringTested   bool
-	cachePath       string
 }
 
 // Option is a functional option for configuring the Cache
@@ -56,18 +49,10 @@ func WithTTL(ttl time.Duration) Option {
 	}
 }
 
-// WithCachePath sets a custom path for file-based cache storage
-func WithCachePath(path string) Option {
-	return func(c *Cache) {
-		c.cachePath = path
-	}
-}
-
 // New creates a new Cache instance
 func New(opts ...Option) *Cache {
 	cache := &Cache{
-		ttl:       DefaultTTL,
-		cachePath: getDefaultCachePath(),
+		ttl: DefaultTTL,
 	}
 
 	for _, opt := range opts {
@@ -75,19 +60,6 @@ func New(opts ...Option) *Cache {
 	}
 
 	return cache
-}
-
-// getDefaultCachePath returns the default path for cache file storage
-func getDefaultCachePath() string {
-	configHome := os.Getenv("XDG_CONFIG_HOME")
-	if configHome == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return filepath.Join(".", ConfigDirName, CacheFileName)
-		}
-		configHome = filepath.Join(homeDir, ".config")
-	}
-	return filepath.Join(configHome, ConfigDirName, CacheFileName)
 }
 
 // GenerateCacheKey generates a unique cache key based on provider configuration.
@@ -139,6 +111,10 @@ func sortedConfigString(config map[string]interface{}) string {
 
 // Get retrieves cached secrets for a provider if they exist and are not expired
 func (c *Cache) Get(cacheKey string) (map[string]string, bool) {
+	if !c.isKeyringAvailable() {
+		return nil, false
+	}
+
 	store := c.loadStore()
 	if store == nil {
 		return nil, false
@@ -160,15 +136,21 @@ func (c *Cache) Get(cacheKey string) (map[string]string, bool) {
 	return cached.Secrets, true
 }
 
-// Set stores secrets in the cache with the configured TTL
+// Set stores secrets in the cache with the configured TTL.
+// If keyring is not available, this is a no-op (returns nil).
 func (c *Cache) Set(cacheKey string, secrets map[string]string) error {
+	if !c.isKeyringAvailable() {
+		// Silently skip caching when keyring is not available
+		return nil
+	}
+
 	store := c.loadStore()
 	if store == nil {
 		store = &CacheStore{
 			Providers: make(map[string]*CachedSecrets),
 		}
 	}
-	// Ensure Providers map is initialized (handles corrupted/empty cache files)
+	// Ensure Providers map is initialized (handles corrupted cache)
 	if store.Providers == nil {
 		store.Providers = make(map[string]*CachedSecrets)
 	}
@@ -185,25 +167,23 @@ func (c *Cache) Set(cacheKey string, secrets map[string]string) error {
 
 // Clear removes all cached secrets
 func (c *Cache) Clear() error {
-	var lastErr error
-
-	// Try to clear from keyring
-	if c.isKeyringAvailable() {
-		if err := keyring.Delete(KeyringService, "cache"); err != nil && err != keyring.ErrNotFound {
-			lastErr = fmt.Errorf("failed to remove cache from keyring: %w", err)
-		}
+	if !c.isKeyringAvailable() {
+		return nil
 	}
 
-	// Also try to clear from file
-	if err := os.Remove(c.cachePath); err != nil && !os.IsNotExist(err) {
-		lastErr = fmt.Errorf("failed to remove cache file: %w", err)
+	if err := keyring.Delete(KeyringService, "cache"); err != nil && err != keyring.ErrNotFound {
+		return fmt.Errorf("failed to remove cache from keyring: %w", err)
 	}
 
-	return lastErr
+	return nil
 }
 
 // ClearProvider removes cached secrets for a specific provider
 func (c *Cache) ClearProvider(cacheKey string) error {
+	if !c.isKeyringAvailable() {
+		return nil
+	}
+
 	store := c.loadStore()
 	if store == nil {
 		return nil
@@ -215,6 +195,10 @@ func (c *Cache) ClearProvider(cacheKey string) error {
 
 // CleanExpired removes all expired cache entries
 func (c *Cache) CleanExpired() error {
+	if !c.isKeyringAvailable() {
+		return nil
+	}
+
 	store := c.loadStore()
 	if store == nil {
 		return nil
@@ -258,77 +242,32 @@ func (c *Cache) isKeyringAvailable() bool {
 	return true
 }
 
-// loadStore loads the cache store from keyring or file
+// loadStore loads the cache store from keyring
 func (c *Cache) loadStore() *CacheStore {
-	// Try keyring first
-	if c.isKeyringAvailable() {
-		data, err := keyring.Get(KeyringService, "cache")
-		if err == nil {
-			var store CacheStore
-			if err := json.Unmarshal([]byte(data), &store); err == nil {
-				return &store
-			}
-			// Invalid data, clean up
-			_ = keyring.Delete(KeyringService, "cache")
-		}
-	}
-
-	// Fall back to file
-	return c.loadStoreFromFile()
-}
-
-// loadStoreFromFile loads the cache store from a file
-func (c *Cache) loadStoreFromFile() *CacheStore {
-	data, err := os.ReadFile(c.cachePath)
+	data, err := keyring.Get(KeyringService, "cache")
 	if err != nil {
 		return nil
 	}
 
 	var store CacheStore
-	if err := json.Unmarshal(data, &store); err != nil {
+	if err := json.Unmarshal([]byte(data), &store); err != nil {
+		// Invalid data, clean up
+		_ = keyring.Delete(KeyringService, "cache")
 		return nil
 	}
 
 	return &store
 }
 
-// saveStore saves the cache store to keyring or file
+// saveStore saves the cache store to keyring
 func (c *Cache) saveStore(store *CacheStore) error {
 	data, err := json.Marshal(store)
 	if err != nil {
 		return fmt.Errorf("failed to marshal cache store: %w", err)
 	}
 
-	// Try keyring first
-	if c.isKeyringAvailable() {
-		err := keyring.Set(KeyringService, "cache", string(data))
-		if err == nil {
-			// Clean up any old file storage
-			_ = os.Remove(c.cachePath)
-			return nil
-		}
-	}
-
-	// Fall back to file storage
-	return c.saveStoreToFile(store)
-}
-
-// saveStoreToFile saves the cache store to a file
-func (c *Cache) saveStoreToFile(store *CacheStore) error {
-	// Ensure directory exists
-	dir := filepath.Dir(c.cachePath)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("failed to create cache directory: %w", err)
-	}
-
-	data, err := json.MarshalIndent(store, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal cache store: %w", err)
-	}
-
-	// Write with secure permissions
-	if err := os.WriteFile(c.cachePath, data, 0600); err != nil {
-		return fmt.Errorf("failed to write cache file: %w", err)
+	if err := keyring.Set(KeyringService, "cache", string(data)); err != nil {
+		return fmt.Errorf("failed to save cache to keyring: %w", err)
 	}
 
 	return nil
@@ -341,6 +280,10 @@ func (c *Cache) GetTTL() time.Duration {
 
 // Stats returns cache statistics
 func (c *Cache) Stats() (total int, valid int, expired int) {
+	if !c.isKeyringAvailable() {
+		return 0, 0, 0
+	}
+
 	store := c.loadStore()
 	if store == nil {
 		return 0, 0, 0
@@ -356,4 +299,9 @@ func (c *Cache) Stats() (total int, valid int, expired int) {
 		}
 	}
 	return total, valid, expired
+}
+
+// IsAvailable returns whether the cache backend (keyring) is available
+func (c *Cache) IsAvailable() bool {
+	return c.isKeyringAvailable()
 }
