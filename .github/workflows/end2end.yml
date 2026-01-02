@@ -26,7 +26,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Setup env via sstart
-        uses: securestart/setup-sstart-env@main
+        uses: securestart/setup-sstart-env@v2.1
         env:
           INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET }}
           INFISICAL_UNIVERSAL_AUTH_CLIENT_ID: ${{ secrets.INFISICAL_UNIVERSAL_AUTH_CLIENT_ID }}
