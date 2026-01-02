@@ -249,10 +249,8 @@ func TestJSONRPCMessage_RoundTrip(t *testing.T) {
 func TestInitializeParams_Marshal(t *testing.T) {
 	params := InitializeParams{
 		ProtocolVersion: MCPProtocolVersion,
-		Capabilities: Capabilities{
-			Tools: &ToolsCapability{ListChanged: true},
-		},
-		ClientInfo: Info{
+		Capabilities:    ClientCapabilities{},
+		ClientInfo: Implementation{
 			Name:    "test-client",
 			Version: "1.0.0",
 		},

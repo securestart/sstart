@@ -42,8 +42,8 @@ type Server struct {
 	cancelFunc context.CancelFunc
 
 	// Cached capabilities after initialization
-	capabilities *Capabilities
-	serverInfo   *Info
+	capabilities *ServerCapabilities
+	serverInfo   *Implementation
 
 	// Cached primitives (populated lazily)
 	tools             []Tool
@@ -346,7 +346,7 @@ func (s *Server) ForwardRequest(ctx context.Context, msg *JSONRPCMessage) (*JSON
 }
 
 // Initialize sends the initialize request to the server
-func (s *Server) Initialize(ctx context.Context, clientInfo Info, clientCapabilities Capabilities) error {
+func (s *Server) Initialize(ctx context.Context, clientInfo Implementation, clientCapabilities ClientCapabilities) error {
 	params := InitializeParams{
 		ProtocolVersion: MCPProtocolVersion,
 		Capabilities:    clientCapabilities,
@@ -367,8 +367,8 @@ func (s *Server) Initialize(ctx context.Context, clientInfo Info, clientCapabili
 		return fmt.Errorf("failed to unmarshal initialize result: %w", err)
 	}
 
-	s.capabilities = &result.Capabilities
-	s.serverInfo = &result.ServerInfo
+	s.capabilities = result.Capabilities
+	s.serverInfo = result.ServerInfo
 
 	// Send initialized notification
 	if err := s.SendNotification(MethodInitialized, nil); err != nil {
@@ -379,12 +379,12 @@ func (s *Server) Initialize(ctx context.Context, clientInfo Info, clientCapabili
 }
 
 // Capabilities returns the server's capabilities (available after initialization)
-func (s *Server) Capabilities() *Capabilities {
+func (s *Server) Capabilities() *ServerCapabilities {
 	return s.capabilities
 }
 
 // ServerInfo returns the server's info (available after initialization)
-func (s *Server) ServerInfo() *Info {
+func (s *Server) ServerInfo() *Implementation {
 	return s.serverInfo
 }
 
@@ -584,7 +584,7 @@ func (m *ServerManager) Servers() []string {
 }
 
 // InitializeAll initializes all running servers
-func (m *ServerManager) InitializeAll(ctx context.Context, clientInfo Info, clientCapabilities Capabilities) error {
+func (m *ServerManager) InitializeAll(ctx context.Context, clientInfo Implementation, clientCapabilities ClientCapabilities) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

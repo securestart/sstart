@@ -23,11 +23,11 @@ type Proxy struct {
 	cancel    context.CancelFunc
 
 	// Proxy info
-	proxyInfo Info
+	proxyInfo Implementation
 
 	// Client info (received during initialization)
-	clientInfo         *Info
-	clientCapabilities *Capabilities
+	clientInfo         *Implementation
+	clientCapabilities *ClientCapabilities
 
 	// Aggregated primitives cache
 	toolsCache             []Tool
@@ -43,7 +43,7 @@ func NewProxy(manager *ServerManager, transport Transport, version string) *Prox
 	return &Proxy{
 		manager:   manager,
 		transport: transport,
-		proxyInfo: Info{
+		proxyInfo: Implementation{
 			Name:    "sstart-mcp-proxy",
 			Version: version,
 		},
@@ -145,12 +145,12 @@ func (p *Proxy) handleInitialize(msg *JSONRPCMessage) (*JSONRPCMessage, error) {
 	// Return our aggregated capabilities
 	result := InitializeResult{
 		ProtocolVersion: MCPProtocolVersion,
-		Capabilities: Capabilities{
-			Tools:     &ToolsCapability{ListChanged: false},
-			Resources: &ResourcesCapability{Subscribe: false, ListChanged: false},
-			Prompts:   &PromptsCapability{ListChanged: false},
+		Capabilities: &ServerCapabilities{
+			Tools:     &ToolCapabilities{ListChanged: false},
+			Resources: &ResourceCapabilities{Subscribe: false, ListChanged: false},
+			Prompts:   &PromptCapabilities{ListChanged: false},
 		},
-		ServerInfo:   p.proxyInfo,
+		ServerInfo:   &p.proxyInfo,
 		Instructions: "sstart MCP proxy - aggregates multiple MCP servers with secret injection",
 	}
 
@@ -380,12 +380,12 @@ func (p *Proxy) ensureServerInitialized(server *Server) error {
 		return nil // Already initialized
 	}
 
-	clientInfo := Info{
+	clientInfo := Implementation{
 		Name:    "sstart-mcp-proxy",
 		Version: "0.1.0",
 	}
 
-	clientCapabilities := Capabilities{}
+	var clientCapabilities ClientCapabilities
 	if p.clientCapabilities != nil {
 		// Pass through relevant client capabilities
 		clientCapabilities = *p.clientCapabilities
@@ -464,7 +464,7 @@ func (p *Proxy) getAggregatedResources() ([]Resource, error) {
 				URI:         p.namespaceName(serverID, resource.URI),
 				Name:        p.namespaceName(serverID, resource.Name),
 				Description: resource.Description,
-				MimeType:    resource.MimeType,
+				MIMEType:    resource.MIMEType,
 			}
 			allResources = append(allResources, namespacedResource)
 		}
@@ -504,7 +504,7 @@ func (p *Proxy) getAggregatedResourceTemplates() ([]ResourceTemplate, error) {
 				URITemplate: p.namespaceName(serverID, template.URITemplate),
 				Name:        p.namespaceName(serverID, template.Name),
 				Description: template.Description,
-				MimeType:    template.MimeType,
+				MIMEType:    template.MIMEType,
 			}
 			allTemplates = append(allTemplates, namespacedTemplate)
 		}

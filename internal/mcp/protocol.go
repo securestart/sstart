@@ -1,10 +1,14 @@
 // Package mcp implements the Model Context Protocol (MCP) proxy functionality.
 // It provides types and utilities for JSON-RPC 2.0 communication and MCP message handling.
+// This package uses types from the official MCP SDK where possible, with custom
+// JSON-RPC transport layer for our proxy implementation.
 package mcp
 
 import (
 	"encoding/json"
 	"fmt"
+
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const (
@@ -23,6 +27,72 @@ const (
 	InvalidParams  = -32602
 	InternalError  = -32603
 )
+
+// MCP Method names
+const (
+	MethodInitialize             = "initialize"
+	MethodInitialized            = "notifications/initialized"
+	MethodToolsList              = "tools/list"
+	MethodToolsCall              = "tools/call"
+	MethodResourcesList          = "resources/list"
+	MethodResourcesRead          = "resources/read"
+	MethodResourcesTemplatesList = "resources/templates/list"
+	MethodPromptsList            = "prompts/list"
+	MethodPromptsGet             = "prompts/get"
+	MethodPing                   = "ping"
+	MethodCancelled              = "notifications/cancelled"
+	MethodProgress               = "notifications/progress"
+)
+
+// Re-export SDK types for use in our implementation
+// Core MCP primitives
+type (
+	Tool             = sdk.Tool
+	Resource         = sdk.Resource
+	ResourceTemplate = sdk.ResourceTemplate
+	Prompt           = sdk.Prompt
+	PromptArgument   = sdk.PromptArgument
+	Content          = sdk.Content
+	PromptMessage    = sdk.PromptMessage
+)
+
+// Implementation and capabilities from SDK
+type (
+	Implementation       = sdk.Implementation
+	ClientCapabilities   = sdk.ClientCapabilities
+	ServerCapabilities   = sdk.ServerCapabilities
+	ToolCapabilities     = sdk.ToolCapabilities
+	ResourceCapabilities = sdk.ResourceCapabilities
+	PromptCapabilities   = sdk.PromptCapabilities
+)
+
+// Request/Response types from SDK
+type (
+	InitializeResult            = sdk.InitializeResult
+	CallToolParams              = sdk.CallToolParams
+	CallToolResult              = sdk.CallToolResult
+	ListToolsResult             = sdk.ListToolsResult
+	ListResourcesResult         = sdk.ListResourcesResult
+	ListResourceTemplatesResult = sdk.ListResourceTemplatesResult
+	ListPromptsResult           = sdk.ListPromptsResult
+	ReadResourceParams          = sdk.ReadResourceParams
+	ReadResourceResult          = sdk.ReadResourceResult
+	GetPromptParams             = sdk.GetPromptParams
+	GetPromptResult             = sdk.GetPromptResult
+)
+
+// InitializeParams represents the parameters for the initialize request
+// We define this ourselves for unmarshaling from our JSON-RPC layer
+type InitializeParams struct {
+	ProtocolVersion string             `json:"protocolVersion"`
+	Capabilities    ClientCapabilities `json:"capabilities"`
+	ClientInfo      Implementation     `json:"clientInfo"`
+}
+
+// PaginatedRequest represents a request with pagination
+type PaginatedRequest struct {
+	Cursor *string `json:"cursor,omitempty"`
+}
 
 // RequestID represents a JSON-RPC request ID which can be string, number, or null
 type RequestID struct {
@@ -171,209 +241,44 @@ func NewJSONRPCErrorResponse(id interface{}, code int, message string, data inte
 	}, nil
 }
 
-// MCP Message Types
-
-// Info represents client or server information
-type Info struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+// ToolCallParams is our custom params type for tools/call
+// Using our own to avoid SDK's complex generic request types
+type ToolCallParams struct {
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments,omitempty"`
 }
 
-// Capabilities represents client or server capabilities
-type Capabilities struct {
-	// Client capabilities
-	Roots       *RootsCapability       `json:"roots,omitempty"`
-	Sampling    *SamplingCapability    `json:"sampling,omitempty"`
-	Elicitation *ElicitationCapability `json:"elicitation,omitempty"`
-
-	// Server capabilities
-	Tools     *ToolsCapability     `json:"tools,omitempty"`
-	Resources *ResourcesCapability `json:"resources,omitempty"`
-	Prompts   *PromptsCapability   `json:"prompts,omitempty"`
-	Logging   *LoggingCapability   `json:"logging,omitempty"`
+// ResourcesReadParams is our custom params type for resources/read
+type ResourcesReadParams struct {
+	URI string `json:"uri"`
 }
 
-// RootsCapability represents the roots capability
-type RootsCapability struct {
-	ListChanged bool `json:"listChanged,omitempty"`
+// PromptsGetParams is our custom params type for prompts/get
+type PromptsGetParams struct {
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments,omitempty"`
 }
 
-// SamplingCapability represents the sampling capability
-type SamplingCapability struct{}
-
-// ElicitationCapability represents the elicitation capability
-type ElicitationCapability struct{}
-
-// ToolsCapability represents the tools capability
-type ToolsCapability struct {
-	ListChanged bool `json:"listChanged,omitempty"`
-}
-
-// ResourcesCapability represents the resources capability
-type ResourcesCapability struct {
-	Subscribe   bool `json:"subscribe,omitempty"`
-	ListChanged bool `json:"listChanged,omitempty"`
-}
-
-// PromptsCapability represents the prompts capability
-type PromptsCapability struct {
-	ListChanged bool `json:"listChanged,omitempty"`
-}
-
-// LoggingCapability represents the logging capability
-type LoggingCapability struct{}
-
-// InitializeParams represents the parameters for the initialize request
-type InitializeParams struct {
-	ProtocolVersion string       `json:"protocolVersion"`
-	Capabilities    Capabilities `json:"capabilities"`
-	ClientInfo      Info         `json:"clientInfo"`
-}
-
-// InitializeResult represents the result of the initialize request
-type InitializeResult struct {
-	ProtocolVersion string       `json:"protocolVersion"`
-	Capabilities    Capabilities `json:"capabilities"`
-	ServerInfo      Info         `json:"serverInfo"`
-	Instructions    string       `json:"instructions,omitempty"`
-}
-
-// Tool represents an MCP tool
-type Tool struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description,omitempty"`
-	InputSchema json.RawMessage `json:"inputSchema"`
-}
-
-// ToolsListResult represents the result of tools/list
+// ToolsListResult is our result type for tools/list
 type ToolsListResult struct {
 	Tools      []Tool  `json:"tools"`
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// ToolCallParams represents the parameters for tools/call
-type ToolCallParams struct {
-	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments,omitempty"`
-}
-
-// ToolCallResult represents the result of tools/call
-type ToolCallResult struct {
-	Content []Content `json:"content"`
-	IsError bool      `json:"isError,omitempty"`
-}
-
-// Content represents content in tool results
-type Content struct {
-	Type     string `json:"type"`
-	Text     string `json:"text,omitempty"`
-	MimeType string `json:"mimeType,omitempty"`
-	Data     string `json:"data,omitempty"` // Base64 encoded for binary
-	// For embedded resources
-	Resource *ResourceContent `json:"resource,omitempty"`
-}
-
-// ResourceContent represents embedded resource content
-type ResourceContent struct {
-	URI      string `json:"uri"`
-	MimeType string `json:"mimeType,omitempty"`
-	Text     string `json:"text,omitempty"`
-	Blob     string `json:"blob,omitempty"` // Base64 encoded
-}
-
-// Resource represents an MCP resource
-type Resource struct {
-	URI         string `json:"uri"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	MimeType    string `json:"mimeType,omitempty"`
-}
-
-// ResourcesListResult represents the result of resources/list
+// ResourcesListResult is our result type for resources/list
 type ResourcesListResult struct {
 	Resources  []Resource `json:"resources"`
 	NextCursor *string    `json:"nextCursor,omitempty"`
 }
 
-// ResourcesReadParams represents the parameters for resources/read
-type ResourcesReadParams struct {
-	URI string `json:"uri"`
-}
-
-// ResourcesReadResult represents the result of resources/read
-type ResourcesReadResult struct {
-	Contents []ResourceContent `json:"contents"`
-}
-
-// ResourceTemplate represents an MCP resource template
-type ResourceTemplate struct {
-	URITemplate string `json:"uriTemplate"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	MimeType    string `json:"mimeType,omitempty"`
-}
-
-// ResourceTemplatesListResult represents the result of resources/templates/list
+// ResourceTemplatesListResult is our result type for resources/templates/list
 type ResourceTemplatesListResult struct {
 	ResourceTemplates []ResourceTemplate `json:"resourceTemplates"`
 	NextCursor        *string            `json:"nextCursor,omitempty"`
 }
 
-// Prompt represents an MCP prompt
-type Prompt struct {
-	Name        string           `json:"name"`
-	Description string           `json:"description,omitempty"`
-	Arguments   []PromptArgument `json:"arguments,omitempty"`
-}
-
-// PromptArgument represents an argument for a prompt
-type PromptArgument struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Required    bool   `json:"required,omitempty"`
-}
-
-// PromptsListResult represents the result of prompts/list
+// PromptsListResult is our result type for prompts/list
 type PromptsListResult struct {
 	Prompts    []Prompt `json:"prompts"`
 	NextCursor *string  `json:"nextCursor,omitempty"`
 }
-
-// PromptsGetParams represents the parameters for prompts/get
-type PromptsGetParams struct {
-	Name      string            `json:"name"`
-	Arguments map[string]string `json:"arguments,omitempty"`
-}
-
-// PromptMessage represents a message in a prompt
-type PromptMessage struct {
-	Role    string    `json:"role"`
-	Content []Content `json:"content"`
-}
-
-// PromptsGetResult represents the result of prompts/get
-type PromptsGetResult struct {
-	Description string          `json:"description,omitempty"`
-	Messages    []PromptMessage `json:"messages"`
-}
-
-// PaginatedRequest represents a request with pagination
-type PaginatedRequest struct {
-	Cursor *string `json:"cursor,omitempty"`
-}
-
-// MCP Method names
-const (
-	MethodInitialize             = "initialize"
-	MethodInitialized            = "notifications/initialized"
-	MethodToolsList              = "tools/list"
-	MethodToolsCall              = "tools/call"
-	MethodResourcesList          = "resources/list"
-	MethodResourcesRead          = "resources/read"
-	MethodResourcesTemplatesList = "resources/templates/list"
-	MethodPromptsList            = "prompts/list"
-	MethodPromptsGet             = "prompts/get"
-	MethodPing                   = "ping"
-	MethodCancelled              = "notifications/cancelled"
-	MethodProgress               = "notifications/progress"
-)
