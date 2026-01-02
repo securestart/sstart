@@ -93,7 +93,7 @@ jobs:
           go build -ldflags="-s -w -X github.com/dirathea/sstart/internal/cli.version=snapshot -X github.com/dirathea/sstart/internal/cli.commit=${{ github.sha }} -X github.com/dirathea/sstart/internal/cli.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o sstart${{ matrix.goos == 'windows' && '.exe' || '' }} ./cmd/sstart
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: sstart-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
           path: sstart${{ matrix.goos == 'windows' && '.exe' || '' }}
