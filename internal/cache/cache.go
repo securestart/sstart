@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/zalando/go-keyring"
@@ -36,7 +37,7 @@ type CacheStore struct {
 type Cache struct {
 	ttl             time.Duration
 	keyringDisabled bool
-	keyringTested   bool
+	keyringOnce     sync.Once
 }
 
 // Option is a functional option for configuring the Cache
@@ -121,7 +122,7 @@ func (c *Cache) Get(cacheKey string) (map[string]string, bool) {
 	}
 
 	cached, exists := store.Providers[cacheKey]
-	if !exists {
+	if !exists || cached == nil {
 		return nil, false
 	}
 
@@ -207,7 +208,7 @@ func (c *Cache) CleanExpired() error {
 	now := time.Now()
 	changed := false
 	for key, cached := range store.Providers {
-		if now.After(cached.ExpiresAt) {
+		if cached == nil || now.After(cached.ExpiresAt) {
 			delete(store.Providers, key)
 			changed = true
 		}
@@ -221,25 +222,15 @@ func (c *Cache) CleanExpired() error {
 
 // isKeyringAvailable checks if keyring is available on this system
 func (c *Cache) isKeyringAvailable() bool {
-	if c.keyringTested {
-		return !c.keyringDisabled
-	}
-
-	c.keyringTested = true
-
-	// Try to access keyring with a test operation
-	_, err := keyring.Get(KeyringService, "test-availability")
-	if err != nil {
-		if err == keyring.ErrNotFound {
-			c.keyringDisabled = false
-			return true
+	c.keyringOnce.Do(func() {
+		// Try to access keyring with a test operation
+		_, err := keyring.Get(KeyringService, "test-availability")
+		if err != nil && err != keyring.ErrNotFound {
+			c.keyringDisabled = true
 		}
-		c.keyringDisabled = true
-		return false
-	}
+	})
 
-	c.keyringDisabled = false
-	return true
+	return !c.keyringDisabled
 }
 
 // loadStore loads the cache store from keyring
@@ -291,6 +282,9 @@ func (c *Cache) Stats() (total int, valid int, expired int) {
 
 	now := time.Now()
 	for _, cached := range store.Providers {
+		if cached == nil {
+			continue
+		}
 		total++
 		if now.Before(cached.ExpiresAt) {
 			valid++

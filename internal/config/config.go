@@ -43,6 +43,9 @@ func (c *CacheConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		if err != nil {
 			return fmt.Errorf("invalid cache TTL format '%s': %w", raw.TTL, err)
 		}
+		if ttl <= 0 {
+			return fmt.Errorf("cache TTL must be positive, got '%s'", raw.TTL)
+		}
 		c.TTL = ttl
 	}
 
