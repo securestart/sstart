@@ -1,5 +1,5 @@
 # Binaries
-./sstart
+sstart
 *.exe
 *.exe~
 *.dll
