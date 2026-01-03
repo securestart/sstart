@@ -160,6 +160,40 @@ sstart run -- python3 show_env.py
 
 ---
 
+### 5. MongoDB MCP Demo with OpenBao
+
+**Location:** `mcp/`
+
+A comprehensive demonstration of sstart's MCP (Model Context Protocol) proxy capabilities with production-like secret management.
+
+See the dedicated [mcp/README.md](./mcp/README.md) for full documentation.
+
+**What it demonstrates:**
+- OpenBao (Vault) for storing MongoDB credentials as granular components
+- Template provider for constructing connection strings from components
+- Secure secret injection into MCP servers (credentials never exposed to AI)
+- AI-powered data generation (no custom initialization scripts)
+- Production-ready secret management patterns
+
+**Quick start:**
+```bash
+cd mcp
+docker-compose up -d
+sstart mcp --config .sstart.yml
+# Configure your AI client (Claude Desktop, VSCode, Cursor)
+# Ask AI to generate sample data!
+```
+
+**Key features:**
+- Zero custom data scripts - AI generates sample data through MCP
+- Production-like architecture using Vault + Template providers
+- Self-contained setup with Docker Compose
+- Clear migration path to production deployments
+
+For detailed setup instructions, architecture diagrams, and troubleshooting, see [mcp/README.md](./mcp/README.md).
+
+---
+
 ## Testing All Examples
 
 You can quickly test all examples with this script:
