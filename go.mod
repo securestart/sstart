@@ -1,6 +1,8 @@
 module github.com/dirathea/sstart
 
-go 1.24.0
+go 1.24.10
+
+toolchain go1.24.12
 
 require (
 	cloud.google.com/go/secretmanager v1.16.0
@@ -26,7 +28,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/localstack v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/vault v0.40.0
 	github.com/zalando/go-keyring v0.2.6
-	github.com/zitadel/logging v0.6.2
+	github.com/zitadel/logging v0.7.0
 	github.com/zitadel/oidc/v3 v3.45.1
 	google.golang.org/api v0.258.0
 	google.golang.org/grpc v1.78.0
