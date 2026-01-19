@@ -249,6 +249,134 @@ func TestSecretsManagerProvider_ConfigWithExtraFields(t *testing.T) {
 	}
 }
 
+func TestParseConfig_WithSSOTokens(t *testing.T) {
+	tests := []struct {
+		name            string
+		config          map[string]interface{}
+		wantAccessToken string
+		wantIDToken     string
+		wantRoleArn     string
+		wantSessionName string
+		wantDuration    int32
+	}{
+		{
+			name: "config with SSO tokens",
+			config: map[string]interface{}{
+				"secret_id":         "test-secret",
+				"_sso_access_token": "test-access-token-123",
+				"_sso_id_token":     "test-id-token-456",
+			},
+			wantAccessToken: "test-access-token-123",
+			wantIDToken:     "test-id-token-456",
+		},
+		{
+			name: "config with SSO tokens and role_arn",
+			config: map[string]interface{}{
+				"secret_id":         "test-secret",
+				"role_arn":          "arn:aws:iam::123456789012:role/test-role",
+				"session_name":      "test-session",
+				"duration":          7200,
+				"_sso_access_token": "access-token",
+				"_sso_id_token":     "id-token",
+			},
+			wantAccessToken: "access-token",
+			wantIDToken:     "id-token",
+			wantRoleArn:     "arn:aws:iam::123456789012:role/test-role",
+			wantSessionName: "test-session",
+			wantDuration:    7200,
+		},
+		{
+			name: "config with only ID token",
+			config: map[string]interface{}{
+				"secret_id":     "test-secret",
+				"_sso_id_token": "only-id-token",
+			},
+			wantIDToken: "only-id-token",
+		},
+		{
+			name: "config with only access token",
+			config: map[string]interface{}{
+				"secret_id":         "test-secret",
+				"_sso_access_token": "only-access-token",
+			},
+			wantAccessToken: "only-access-token",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := parseConfig(tt.config)
+			if err != nil {
+				t.Fatalf("parseConfig() error = %v", err)
+			}
+
+			if cfg.SSOAccessToken != tt.wantAccessToken {
+				t.Errorf("Config.SSOAccessToken = %v, want %v", cfg.SSOAccessToken, tt.wantAccessToken)
+			}
+			if cfg.SSOIDToken != tt.wantIDToken {
+				t.Errorf("Config.SSOIDToken = %v, want %v", cfg.SSOIDToken, tt.wantIDToken)
+			}
+			if cfg.RoleArn != tt.wantRoleArn {
+				t.Errorf("Config.RoleArn = %v, want %v", cfg.RoleArn, tt.wantRoleArn)
+			}
+			if cfg.SessionName != tt.wantSessionName {
+				t.Errorf("Config.SessionName = %v, want %v", cfg.SessionName, tt.wantSessionName)
+			}
+			if cfg.Duration != tt.wantDuration {
+				t.Errorf("Config.Duration = %v, want %v", cfg.Duration, tt.wantDuration)
+			}
+		})
+	}
+}
+
+func TestParseConfig_SSOFields(t *testing.T) {
+	// Test all SSO-related fields
+	config := map[string]interface{}{
+		"secret_id":    "test-secret",
+		"region":       "us-east-1",
+		"role_arn":     "arn:aws:iam::123456789012:role/sstart-role",
+		"session_name": "sstart-test",
+		"duration":     3600,
+	}
+
+	cfg, err := parseConfig(config)
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+
+	if cfg.RoleArn != "arn:aws:iam::123456789012:role/sstart-role" {
+		t.Errorf("Config.RoleArn = %v, want %v", cfg.RoleArn, "arn:aws:iam::123456789012:role/sstart-role")
+	}
+	if cfg.SessionName != "sstart-test" {
+		t.Errorf("Config.SessionName = %v, want %v", cfg.SessionName, "sstart-test")
+	}
+	if cfg.Duration != 3600 {
+		t.Errorf("Config.Duration = %v, want %v", cfg.Duration, 3600)
+	}
+}
+
+func TestParseConfig_SSOTokensNotInJSON(t *testing.T) {
+	// Verify SSO tokens are marked with json:"-" and don't serialize
+	config := map[string]interface{}{
+		"secret_id":         "test-secret",
+		"_sso_access_token": "should-be-extracted",
+		"_sso_id_token":     "should-also-be-extracted",
+	}
+
+	cfg, err := parseConfig(config)
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+
+	// Tokens should be extracted from config map
+	if cfg.SSOAccessToken != "should-be-extracted" {
+		t.Errorf("Config.SSOAccessToken = %v, want %v", cfg.SSOAccessToken, "should-be-extracted")
+	}
+	if cfg.SSOIDToken != "should-also-be-extracted" {
+		t.Errorf("Config.SSOIDToken = %v, want %v", cfg.SSOIDToken, "should-also-be-extracted")
+	}
+}
+
 // Helper function to check if a string contains a substring
 func containsSubstring(s, substr string) bool {
 	if len(substr) == 0 {

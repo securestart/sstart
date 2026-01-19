@@ -14,7 +14,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/hashicorp/vault/api"
 	"github.com/testcontainers/testcontainers-go"
 	localstack "github.com/testcontainers/testcontainers-go/modules/localstack"
@@ -174,6 +176,83 @@ func SetupAWSSecret(ctx context.Context, t *testing.T, localstack *LocalStackCon
 	if err != nil {
 		t.Fatalf("Failed to create secret in AWS Secrets Manager: %v", err)
 	}
+}
+
+// SetupAWSIAMRoleForJWT creates an IAM role in LocalStack that accepts JWT authentication
+// This is a simplified version for testing with LocalStack
+func SetupAWSIAMRoleForJWT(ctx context.Context, t *testing.T, localstack *LocalStackContainer, roleName string) {
+	t.Helper()
+
+	awsRegion := "us-east-1"
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithRegion(awsRegion),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider("test", "test", "")),
+	)
+	if err != nil {
+		t.Fatalf("Failed to load AWS config: %v", err)
+	}
+
+	iamClient := iam.NewFromConfig(awsCfg, func(o *iam.Options) {
+		o.BaseEndpoint = aws.String(localstack.Endpoint)
+	})
+
+	stsClient := sts.NewFromConfig(awsCfg, func(o *sts.Options) {
+		o.BaseEndpoint = aws.String(localstack.Endpoint)
+	})
+
+	// Create a trust policy that allows AssumeRoleWithWebIdentity
+	// For LocalStack testing, we use a permissive policy
+	trustPolicy := `{
+		"Version": "2012-10-17",
+		"Statement": [{
+			"Effect": "Allow",
+			"Principal": {"Service": "sts.amazonaws.com"},
+			"Action": "sts:AssumeRoleWithWebIdentity"
+		}]
+	}`
+
+	// Create IAM role
+	_, err = iamClient.CreateRole(ctx, &iam.CreateRoleInput{
+		RoleName:                 aws.String(roleName),
+		AssumeRolePolicyDocument: aws.String(trustPolicy),
+	})
+	if err != nil {
+		t.Logf("Warning: Failed to create IAM role (may already exist): %v", err)
+	}
+
+	// Attach a policy that allows Secrets Manager access
+	policyDocument := `{
+		"Version": "2012-10-17",
+		"Statement": [{
+			"Effect": "Allow",
+			"Action": "secretsmanager:*",
+			"Resource": "*"
+		}]
+	}`
+
+	policyName := roleName + "-policy"
+	createPolicyOutput, err := iamClient.CreatePolicy(ctx, &iam.CreatePolicyInput{
+		PolicyName:     aws.String(policyName),
+		PolicyDocument: aws.String(policyDocument),
+	})
+	if err != nil {
+		t.Logf("Warning: Failed to create IAM policy (may already exist): %v", err)
+	}
+
+	if createPolicyOutput != nil && createPolicyOutput.Policy != nil {
+		_, err = iamClient.AttachRolePolicy(ctx, &iam.AttachRolePolicyInput{
+			RoleName:  aws.String(roleName),
+			PolicyArn: createPolicyOutput.Policy.Arn,
+		})
+		if err != nil {
+			t.Logf("Warning: Failed to attach policy to role: %v", err)
+		}
+	}
+
+	// Note: In LocalStack, AssumeRoleWithWebIdentity might work without full OIDC setup
+	// LocalStack often accepts JWT tokens more permissively for testing
+	// The test will use STS client directly, which LocalStack should handle
+	_ = stsClient // Use the client to avoid unused warning
 }
 
 // SetupOpenBao starts an OpenBao container and returns the container info
