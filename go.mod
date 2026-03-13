@@ -30,7 +30,7 @@ require (
 	github.com/zitadel/logging v0.7.0
 	github.com/zitadel/oidc/v3 v3.45.3
 	google.golang.org/api v0.258.0
-	google.golang.org/grpc v1.78.0
+	google.golang.org/grpc v1.79.2
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/gotestsum v1.13.0
 )
@@ -161,7 +161,7 @@ require (
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.40.0 // indirect
 	google.golang.org/genproto v0.0.0-20250603155806-513f23925822 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20251029180050-ab9386a59fda // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251213004720-97cd9d5aeac2 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
