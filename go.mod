@@ -15,6 +15,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.3
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.8
 	github.com/bitwarden/sdk-go v1.0.2
+	github.com/bitwarden/sdk-go/v2 v2.0.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/vault/api v1.22.0
