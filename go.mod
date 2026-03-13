@@ -15,21 +15,21 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.3
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.8
 	github.com/bitwarden/sdk-go v1.0.2
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/vault/api v1.22.0
-	github.com/infisical/go-sdk v0.6.4
+	github.com/infisical/go-sdk v0.6.8
 	github.com/joho/godotenv v1.5.1
-	github.com/modelcontextprotocol/go-sdk v1.2.0
+	github.com/modelcontextprotocol/go-sdk v1.4.1
 	github.com/spf13/cobra v1.10.2
-	github.com/testcontainers/testcontainers-go v0.40.0
-	github.com/testcontainers/testcontainers-go/modules/localstack v0.40.0
-	github.com/testcontainers/testcontainers-go/modules/vault v0.40.0
+	github.com/testcontainers/testcontainers-go v0.41.0
+	github.com/testcontainers/testcontainers-go/modules/localstack v0.41.0
+	github.com/testcontainers/testcontainers-go/modules/vault v0.41.0
 	github.com/zalando/go-keyring v0.2.6
 	github.com/zitadel/logging v0.7.0
-	github.com/zitadel/oidc/v3 v3.45.3
-	google.golang.org/api v0.258.0
-	google.golang.org/grpc v1.78.0
+	github.com/zitadel/oidc/v3 v3.45.5
+	google.golang.org/api v0.271.0
+	google.golang.org/grpc v1.79.2
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/gotestsum v1.13.0
 )
