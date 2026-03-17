@@ -14,7 +14,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/iam v1.53.6
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.4
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.9
-	github.com/bitwarden/sdk-go v1.0.2
+	github.com/bitwarden/sdk-go/v2 v2.0.0
 	github.com/bitwarden/sdk-go/v2 v2.0.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
