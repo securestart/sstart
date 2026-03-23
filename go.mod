@@ -25,7 +25,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/localstack v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/vault v0.40.0
-	github.com/zalando/go-keyring v0.2.7
+	github.com/zalando/go-keyring v0.2.8
 	github.com/zitadel/logging v0.7.0
 	github.com/zitadel/oidc/v3 v3.45.3
 	google.golang.org/api v0.258.0
