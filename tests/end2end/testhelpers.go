@@ -60,7 +60,7 @@ type GCSMContainer struct {
 func SetupLocalStack(ctx context.Context, t *testing.T) *LocalStackContainer {
 	t.Helper()
 
-	container, err := localstack.Run(ctx, "localstack/localstack:latest")
+	container, err := localstack.Run(ctx, "localstack/localstack:3")
 	if err != nil {
 		t.Fatalf("Failed to start localstack container: %v", err)
 	}
@@ -90,7 +90,7 @@ func SetupLocalStack(ctx context.Context, t *testing.T) *LocalStackContainer {
 func SetupVault(ctx context.Context, t *testing.T) *VaultContainer {
 	t.Helper()
 
-	container, err := vault.Run(ctx, "hashicorp/vault:latest",
+	container, err := vault.Run(ctx, "hashicorp/vault:1.18",
 		vault.WithToken("test-token"),
 	)
 	if err != nil {
@@ -263,7 +263,7 @@ func SetupOpenBao(ctx context.Context, t *testing.T) *OpenBaoContainer {
 	// OpenBao uses the same API as Vault, so we can use a generic container
 	// OpenBao in dev mode needs to be run with the server -dev command
 	req := testcontainers.ContainerRequest{
-		Image:        "openbao/openbao:latest",
+		Image:        "openbao/openbao:2",
 		ExposedPorts: []string{"8200/tcp"},
 		Cmd:          []string{"server", "-dev", "-dev-root-token-id=test-token", "-dev-listen-address=0.0.0.0:8200"},
 		WaitingFor:   wait.ForHTTP("/v1/sys/health").WithPort("8200/tcp"),
