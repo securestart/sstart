@@ -113,7 +113,7 @@ jobs:
 
       - name: Calculate version
         id: version
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const shortSha = context.sha.substring(0, 7);
@@ -185,7 +185,7 @@ jobs:
 
       - name: Calculate version
         id: version
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const shortSha = context.sha.substring(0, 7);
@@ -219,7 +219,7 @@ jobs:
           ls -la
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Edge Release ${{ steps.version.outputs.version }}
