@@ -59,7 +59,7 @@ jobs:
 
       - name: Calculate version
         id: version
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             // Extract version from tag (remove 'v' prefix if present)
@@ -135,7 +135,7 @@ jobs:
 
       - name: Calculate version
         id: version
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             // Extract version from tag (remove 'v' prefix if present)
@@ -171,7 +171,7 @@ jobs:
           ls -la
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Release ${{ steps.version.outputs.version }}
