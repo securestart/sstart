@@ -29,7 +29,7 @@ require (
 	github.com/zitadel/logging v0.7.0
 	github.com/zitadel/oidc/v3 v3.47.5
 	google.golang.org/api v0.276.0
-	google.golang.org/grpc v1.80.0
+	google.golang.org/grpc v1.81.0
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/gotestsum v1.13.0
 )
