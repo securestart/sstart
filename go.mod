@@ -7,7 +7,7 @@ require (
 	github.com/1password/onepassword-sdk-go v0.4.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
-	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.5.0
+	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.4.0
 	github.com/aws/aws-sdk-go-v2 v1.43.2
 	github.com/aws/aws-sdk-go-v2/config v1.32.17
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.32
