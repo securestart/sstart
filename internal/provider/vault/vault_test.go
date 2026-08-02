@@ -30,7 +30,7 @@ func TestParseConfigWithAuthOptions(t *testing.T) {
 			name: "config with explicit token auth",
 			config: map[string]interface{}{
 				"path": "myapp/secret",
-				"auth": "token",
+				"auth": map[string]interface{}{"method": "token"},
 			},
 			wantAuth:      "token",
 			wantAuthMount: "",
@@ -41,8 +41,7 @@ func TestParseConfigWithAuthOptions(t *testing.T) {
 			name: "config with oidc auth",
 			config: map[string]interface{}{
 				"path": "myapp/secret",
-				"auth": "oidc",
-				"role": "my-role",
+				"auth": map[string]interface{}{"method": "oidc", "role": "my-role"},
 			},
 			wantAuth:      "oidc",
 			wantAuthMount: "",
@@ -52,10 +51,12 @@ func TestParseConfigWithAuthOptions(t *testing.T) {
 		{
 			name: "config with jwt auth and custom mount",
 			config: map[string]interface{}{
-				"path":      "myapp/secret",
-				"auth":      "jwt",
-				"authMount": "custom-jwt",
-				"role":      "app-role",
+				"path": "myapp/secret",
+				"auth": map[string]interface{}{
+					"method": "jwt",
+					"mount":  "custom-jwt",
+					"role":   "app-role",
+				},
 			},
 			wantAuth:      "jwt",
 			wantAuthMount: "custom-jwt",
@@ -75,14 +76,15 @@ func TestParseConfigWithAuthOptions(t *testing.T) {
 				return
 			}
 
-			if cfg.Auth != tt.wantAuth {
-				t.Errorf("parseConfig() Auth = %v, want %v", cfg.Auth, tt.wantAuth)
+			method, mount, role, _ := authFields(cfg)
+			if method != tt.wantAuth {
+				t.Errorf("parseConfig() Auth.Method = %v, want %v", method, tt.wantAuth)
 			}
-			if cfg.AuthMount != tt.wantAuthMount {
-				t.Errorf("parseConfig() AuthMount = %v, want %v", cfg.AuthMount, tt.wantAuthMount)
+			if mount != tt.wantAuthMount {
+				t.Errorf("parseConfig() Auth.Mount = %v, want %v", mount, tt.wantAuthMount)
 			}
-			if cfg.Role != tt.wantRole {
-				t.Errorf("parseConfig() Role = %v, want %v", cfg.Role, tt.wantRole)
+			if role != tt.wantRole {
+				t.Errorf("parseConfig() Auth.Role = %v, want %v", role, tt.wantRole)
 			}
 		})
 	}
@@ -91,8 +93,7 @@ func TestParseConfigWithAuthOptions(t *testing.T) {
 func TestParseConfigWithSSOTokens(t *testing.T) {
 	config := map[string]interface{}{
 		"path":              "myapp/secret",
-		"auth":              "oidc",
-		"role":              "my-role",
+		"auth":              map[string]interface{}{"method": "oidc", "role": "my-role"},
 		"_sso_access_token": "test-access-token-123",
 		"_sso_id_token":     "test-id-token-456",
 	}
@@ -123,18 +124,17 @@ func TestVaultProvider_Fetch_OIDCAuthValidation(t *testing.T) {
 			name: "oidc auth without role",
 			config: map[string]interface{}{
 				"path":              "myapp/secret",
-				"auth":              "oidc",
+				"auth":              map[string]interface{}{"method": "oidc"},
 				"_sso_access_token": "test-token",
 			},
 			wantErr: true,
-			errMsg:  "requires 'role' field",
+			errMsg:  "requires 'auth.role' field",
 		},
 		{
 			name: "oidc auth without SSO token",
 			config: map[string]interface{}{
 				"path": "myapp/secret",
-				"auth": "oidc",
-				"role": "my-role",
+				"auth": map[string]interface{}{"method": "oidc", "role": "my-role"},
 			},
 			wantErr: true,
 			errMsg:  "no SSO token available",
@@ -143,17 +143,17 @@ func TestVaultProvider_Fetch_OIDCAuthValidation(t *testing.T) {
 			name: "jwt auth without role",
 			config: map[string]interface{}{
 				"path":          "myapp/secret",
-				"auth":          "jwt",
+				"auth":          map[string]interface{}{"method": "jwt"},
 				"_sso_id_token": "test-token",
 			},
 			wantErr: true,
-			errMsg:  "requires 'role' field",
+			errMsg:  "requires 'auth.role' field",
 		},
 		{
 			name: "unsupported auth method",
 			config: map[string]interface{}{
 				"path": "myapp/secret",
-				"auth": "invalid-method",
+				"auth": map[string]interface{}{"method": "invalid-method"},
 			},
 			wantErr: true,
 			errMsg:  "unsupported auth method",
@@ -286,8 +286,9 @@ func TestParseConfig(t *testing.T) {
 			if cfg.Address != tt.wantAddress {
 				t.Errorf("parseConfig() Address = %v, want %v", cfg.Address, tt.wantAddress)
 			}
-			if cfg.Token != tt.wantToken {
-				t.Errorf("parseConfig() Token = %v, want %v", cfg.Token, tt.wantToken)
+			// A top-level `token:` is folded into Auth.Token for backward compatibility
+			if _, _, _, token := authFields(cfg); token != tt.wantToken {
+				t.Errorf("parseConfig() Auth.Token = %v, want %v", token, tt.wantToken)
 			}
 			if cfg.Mount != tt.wantMount {
 				t.Errorf("parseConfig() Mount = %v, want %v", cfg.Mount, tt.wantMount)
@@ -381,8 +382,8 @@ func TestVaultProvider_ConfigFields(t *testing.T) {
 	if cfg.Address != "https://custom-vault.example.com:8200" {
 		t.Errorf("Config.Address = %v, want %v", cfg.Address, "https://custom-vault.example.com:8200")
 	}
-	if cfg.Token != "custom-token-123" {
-		t.Errorf("Config.Token = %v, want %v", cfg.Token, "custom-token-123")
+	if _, _, _, token := authFields(cfg); token != "custom-token-123" {
+		t.Errorf("Config.Auth.Token = %v, want %v", token, "custom-token-123")
 	}
 	if cfg.Mount != "custom-secret-engine" {
 		t.Errorf("Config.Mount = %v, want %v", cfg.Mount, "custom-secret-engine")
@@ -406,8 +407,8 @@ func TestVaultProvider_ConfigWithOptionalFields(t *testing.T) {
 	if cfg.Address != "" {
 		t.Errorf("Config.Address = %v, want empty string", cfg.Address)
 	}
-	if cfg.Token != "" {
-		t.Errorf("Config.Token = %v, want empty string", cfg.Token)
+	if _, _, _, token := authFields(cfg); token != "" {
+		t.Errorf("Config.Auth.Token = %v, want empty string", token)
 	}
 	if cfg.Mount != "" {
 		t.Errorf("Config.Mount = %v, want empty string", cfg.Mount)
@@ -453,3 +454,12 @@ func containsSubstring(s, substr string) bool {
 	return false
 }
 
+
+// authFields flattens the nested auth config so tests can assert on it without
+// nil-checking VaultConfig.Auth at every call site.
+func authFields(cfg *VaultConfig) (method, mount, role, token string) {
+	if cfg == nil || cfg.Auth == nil {
+		return "", "", "", ""
+	}
+	return cfg.Auth.Method, cfg.Auth.Mount, cfg.Auth.Role, cfg.Auth.Token
+}

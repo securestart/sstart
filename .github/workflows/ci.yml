@@ -24,6 +24,14 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # The unit tests under ./internal/... were not covered by any workflow, so
+      # they silently stopped compiling as the packages they test were
+      # refactored. Run them first and let a failure fail the job.
+      - name: Run unit tests
+        env:
+          CGO_LDFLAGS: -lm
+        run: go test ./internal/...
+
       - name: Run tests in short mode
         env:
           CGO_LDFLAGS: -lm
