@@ -34,6 +34,7 @@ providers:
 | `dotenv` | Stable |
 | `gcloud_secretmanager` | Stable |
 | `infisical` | Stable |
+| `keyring` | Stable |
 | `template` | Stable |
 | `vault` | Stable |
 
@@ -374,6 +375,71 @@ The provider uses the Infisical Go SDK to authenticate with Infisical using Univ
 - When `recursive: true`, secrets from subdirectories are also included
 - When `include_imports: true`, secrets imported from other projects are included
 - When `expand_secrets: true`, secret references (e.g., `${OTHER_SECRET}`) are expanded to their actual values
+
+### Keyring (`keyring`)
+
+Reads a secret from the operating system's credential store: Keychain on macOS, Credential Manager on Windows, and Secret Service on Linux.
+
+**Dependencies:**
+- No CLI required. On Linux a Secret Service implementation must be running (for example `gnome-keyring`), which is often absent on headless hosts.
+
+**Configuration:**
+- `service` (required): The item's service name
+- `user` (required): The item's account name
+- `pointer` (optional): An [RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901) JSON pointer selecting a node inside a JSON payload, for example `/claudeAiOauth/accessToken`
+- `key` (optional): The environment variable name to use when the payload is not a JSON object. Defaults to `<PROVIDER_ID>_SECRET`
+
+Both `service` and `user` are required because the credential store cannot be enumerated — an item is only reachable through its exact identity.
+
+**Example:**
+```yaml
+providers:
+  - kind: keyring
+    id: db
+    service: myapp
+    user: postgres
+```
+
+**Example with a JSON pointer:**
+```yaml
+providers:
+  - kind: keyring
+    id: claude
+    service: Claude Code-credentials
+    user: husni
+    pointer: /claudeAiOauth/accessToken
+    key: CLAUDE_TOKEN
+```
+
+**JSON Secrets:**
+If the item's value is a JSON object, it is parsed and each key-value pair is mapped according to the `keys` configuration, the same as the cloud providers. If `keys` is empty, all keys are mapped. See [Value Types](#value-types) for how non-string JSON values become environment variables.
+
+**Plain Text Secrets:**
+If the value is not a JSON object, it is mapped to a single environment variable named `<PROVIDER_ID>_SECRET` (the provider's `id` uppercased, with hyphens converted to underscores). Set `key` to choose a different name.
+
+**Narrowing with `pointer`:**
+Without `pointer`, the whole item is read. A credential blob often holds many unrelated secrets, and every one of them would then be exported to the child process. `pointer` selects a single node first: if it resolves to an object the object is expanded, otherwise it becomes one variable named by `key`.
+
+`pointer` requires the item's value to be JSON. Pointing at a value that is not JSON, or at a node that does not exist, is an error rather than an empty result.
+
+The field is called `pointer` rather than `path` because in `dotenv`, `infisical` and `vault`, `path` already means where the secret lives, not where to look inside it.
+
+**Populating the store:**
+
+This provider only reads. Create items with the tools your platform provides:
+
+```bash
+# macOS
+security add-generic-password -s myapp -a postgres -w
+
+# Windows (PowerShell or cmd)
+cmdkey /generic:myapp /user:postgres /pass
+
+# Linux
+secret-tool store --label=myapp service myapp username postgres
+```
+
+**Note:** sstart can never read an item that the OS does not release to it. On macOS, an item created by another application carries an access control list, and the system prompts before releasing it to a different binary.
 
 ### HashiCorp Vault / OpenBao (`vault`)
 
