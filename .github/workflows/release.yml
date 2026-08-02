@@ -35,6 +35,11 @@ jobs:
             goos: darwin
             goarch: arm64
             binary_name: sstart
+          - build_id: sstart-windows-amd64
+            runner: windows-latest
+            goos: windows
+            goarch: amd64
+            binary_name: sstart.exe
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout code
@@ -86,6 +91,7 @@ jobs:
             ./cmd/sstart
 
       - name: Prepare release archive
+        if: matrix.goos != 'windows'
         run: |
           mkdir -p release
           
@@ -114,6 +120,30 @@ jobs:
           # Verify archive structure (binary should be at root)
           echo "Archive contents:"
           tar -tzf "release/${ARCHIVE_NAME}.tar.gz" | head -10
+
+      # Windows ships a .zip instead of a .tar.gz: it is what Windows users
+      # expect, and Compress-Archive is guaranteed present on the runner
+      # image, unlike zip(1). The publish job already collects *.zip.
+      - name: Prepare release archive (Windows)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+
+          $archiveName = "sstart-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          $stageDir = (New-Item -ItemType Directory -Force -Path (Join-Path $env:RUNNER_TEMP $archiveName)).FullName
+
+          Copy-Item "${{ matrix.binary_name }}" -Destination $stageDir
+          Copy-Item LICENSE, README.md -Destination $stageDir -ErrorAction SilentlyContinue
+
+          Write-Host "Archive contents:"
+          Get-ChildItem $stageDir | ForEach-Object { Write-Host "  $($_.Name)" }
+
+          # Archive the staged contents, not the folder itself, so the binary
+          # sits at the archive root like it does in the tar.gz builds
+          Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath "release/$archiveName.zip" -Force
+          Remove-Item $stageDir -Recurse -Force
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
@@ -179,7 +209,7 @@ jobs:
             Release ${{ steps.version.outputs.version }}
             
             ## Assets
-            - Pre-built binaries for Linux (amd64, arm64) and macOS (amd64, arm64)
+            - Pre-built binaries for Linux (amd64, arm64), macOS (amd64, arm64), and Windows (amd64)
             - Checksums file for verification
           files: release/*
           draft: false

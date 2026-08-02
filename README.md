@@ -29,28 +29,33 @@ You define all your required secrets from all your sources in a single, declarat
 
 ### Install from GitHub Releases (Recommended)
 
-Download the pre-built binary for your platform from the [latest release](https://github.com/dirathea/sstart/releases/latest):
+Download the pre-built binary for your platform from the [latest release](https://github.com/securestart/sstart/releases/latest).
 
-**Linux (amd64):**
+Release assets are named `sstart-<version>-<os>-<arch>.tar.gz` (`.zip` on Windows), so the
+version is part of the filename. Resolve the latest tag first, then download:
+
+**Linux and macOS:**
 ```bash
-curl -L https://github.com/dirathea/sstart/releases/latest/download/sstart_Linux_x86_64.tar.gz | tar -xz
+VERSION=$(curl -s https://api.github.com/repos/securestart/sstart/releases/latest | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -1)
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')          # linux | darwin
+ARCH=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')  # amd64 | arm64
+
+curl -L "https://github.com/securestart/sstart/releases/download/v${VERSION}/sstart-${VERSION}-${OS}-${ARCH}.tar.gz" | tar -xz
 sudo mv sstart /usr/local/bin/
 ```
 
-**macOS (amd64):**
-```bash
-curl -L https://github.com/dirathea/sstart/releases/latest/download/sstart_Darwin_x86_64.tar.gz | tar -xz
-sudo mv sstart /usr/local/bin/
-```
+Supported combinations: `linux-amd64`, `linux-arm64`, `darwin-amd64`, `darwin-arm64`.
 
-**macOS (Apple Silicon/arm64):**
-```bash
-curl -L https://github.com/dirathea/sstart/releases/latest/download/sstart_Darwin_arm64.tar.gz | tar -xz
-sudo mv sstart /usr/local/bin/
+**Windows (amd64), PowerShell:**
+```powershell
+$version = (Invoke-RestMethod https://api.github.com/repos/securestart/sstart/releases/latest).tag_name.TrimStart('v')
+Invoke-WebRequest "https://github.com/securestart/sstart/releases/download/v$version/sstart-$version-windows-amd64.zip" -OutFile sstart.zip
+Expand-Archive sstart.zip -DestinationPath .
+# then move sstart.exe somewhere on your PATH
 ```
 
 **Using a specific version:**
-Replace `latest` with a version tag (e.g., `v1.0.0`) in the URLs above.
+Set `VERSION` (or `$version`) to the release you want, e.g. `0.0.11`, instead of querying the API.
 
 ### Install via Go
 
