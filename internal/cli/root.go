@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	_ "github.com/dirathea/sstart/internal/provider/aws"
+	_ "github.com/dirathea/sstart/internal/provider/azurekeyvault"
 	_ "github.com/dirathea/sstart/internal/provider/bitwarden"
 	_ "github.com/dirathea/sstart/internal/provider/doppler"
 	_ "github.com/dirathea/sstart/internal/provider/dotenv"
