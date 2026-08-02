@@ -1,0 +1,440 @@
+package keyring
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/dirathea/sstart/internal/provider"
+	"github.com/dirathea/sstart/internal/secrets"
+	gokeyring "github.com/zalando/go-keyring"
+)
+
+func TestKeyringProvider_Name(t *testing.T) {
+	p := &KeyringProvider{}
+	if got := p.Name(); got != "keyring" {
+		t.Errorf("Name() = %v, want %v", got, "keyring")
+	}
+}
+
+func TestParseConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      map[string]interface{}
+		wantService string
+		wantUser    string
+		wantPointer string
+		wantKey     string
+	}{
+		{
+			name:        "service and user",
+			config:      map[string]interface{}{"service": "myapp", "user": "postgres"},
+			wantService: "myapp",
+			wantUser:    "postgres",
+		},
+		{
+			name:        "with pointer and key",
+			config:      map[string]interface{}{"service": "Claude Code-credentials", "user": "husni", "pointer": "/claudeAiOauth/accessToken", "key": "CLAUDE_TOKEN"},
+			wantService: "Claude Code-credentials",
+			wantUser:    "husni",
+			wantPointer: "/claudeAiOauth/accessToken",
+			wantKey:     "CLAUDE_TOKEN",
+		},
+		{
+			name:        "unknown fields are ignored",
+			config:      map[string]interface{}{"service": "s", "user": "u", "extra": 1},
+			wantService: "s",
+			wantUser:    "u",
+		},
+		{
+			name:        "path is not mistaken for pointer",
+			config:      map[string]interface{}{"service": "s", "user": "u", "path": "/a"},
+			wantService: "s",
+			wantUser:    "u",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := parseConfig(tt.config)
+			if err != nil {
+				t.Fatalf("parseConfig() error = %v", err)
+			}
+			if cfg.Service != tt.wantService {
+				t.Errorf("Service = %q, want %q", cfg.Service, tt.wantService)
+			}
+			if cfg.User != tt.wantUser {
+				t.Errorf("User = %q, want %q", cfg.User, tt.wantUser)
+			}
+			if cfg.Pointer != tt.wantPointer {
+				t.Errorf("Pointer = %q, want %q", cfg.Pointer, tt.wantPointer)
+			}
+			if cfg.Key != tt.wantKey {
+				t.Errorf("Key = %q, want %q", cfg.Key, tt.wantKey)
+			}
+		})
+	}
+}
+
+func TestFetch_RequiredFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  map[string]interface{}
+		wantMsg string
+	}{
+		{"missing service", map[string]interface{}{"user": "u"}, "requires 'service' field"},
+		{"empty service", map[string]interface{}{"service": "", "user": "u"}, "requires 'service' field"},
+		{"missing user", map[string]interface{}{"service": "s"}, "requires 'user' field"},
+		{"empty user", map[string]interface{}{"service": "s", "user": ""}, "requires 'user' field"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := fetchForTest(t, tt.config, nil)
+			if err == nil {
+				t.Fatal("Fetch() succeeded, want an error")
+			}
+			if !strings.Contains(err.Error(), tt.wantMsg) {
+				t.Errorf("Fetch() error = %q, want it to contain %q", err.Error(), tt.wantMsg)
+			}
+		})
+	}
+}
+
+func TestFetch_PlainValue(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("myapp", "postgres", "hunter2"); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{"service": "myapp", "user": "postgres"}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	if len(kvs) != 1 {
+		t.Fatalf("got %d variables, want 1: %v", len(kvs), kvs)
+	}
+	if kvs[0].Key != "KEYRING_TEST_SECRET" {
+		t.Errorf("Key = %q, want %q", kvs[0].Key, "KEYRING_TEST_SECRET")
+	}
+	if kvs[0].Value != "hunter2" {
+		t.Errorf("Value = %q, want %q", kvs[0].Value, "hunter2")
+	}
+}
+
+func TestFetch_PlainValueNamedByKeyField(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("myapp", "postgres", "hunter2"); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t,
+		map[string]interface{}{"service": "myapp", "user": "postgres", "key": "DB_PASSWORD"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	if len(kvs) != 1 {
+		t.Fatalf("got %d variables, want 1: %v", len(kvs), kvs)
+	}
+	if kvs[0].Key != "DB_PASSWORD" {
+		t.Errorf("Key = %q, want %q", kvs[0].Key, "DB_PASSWORD")
+	}
+	if kvs[0].Value != "hunter2" {
+		t.Errorf("Value = %q, want %q", kvs[0].Value, "hunter2")
+	}
+}
+
+func TestFetch_ItemNotFound(t *testing.T) {
+	gokeyring.MockInit()
+
+	_, err := fetchForTest(t, map[string]interface{}{"service": "absent", "user": "nobody"}, nil)
+	if err == nil {
+		t.Fatal("Fetch() succeeded, want an error")
+	}
+	// Both identifiers must appear: a typo in either produces this error.
+	for _, want := range []string{"absent", "nobody"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to contain %q", err.Error(), want)
+		}
+	}
+}
+
+func TestFetch_KeyringUnavailable(t *testing.T) {
+	gokeyring.MockInitWithError(errors.New("no secret service available"))
+	t.Cleanup(gokeyring.MockInit)
+
+	_, err := fetchForTest(t, map[string]interface{}{"service": "myapp", "user": "postgres"}, nil)
+	if err == nil {
+		t.Fatal("Fetch() succeeded, want an error rather than an empty result")
+	}
+	if !strings.Contains(err.Error(), "keyring") {
+		t.Errorf("error = %q, want it to mention the keyring", err.Error())
+	}
+}
+
+// fetchForTest calls Fetch with the provider id "keyring-test", which is what
+// makes the default variable name KEYRING_TEST_SECRET.
+func fetchForTest(t *testing.T, config map[string]interface{}, keys map[string]string) ([]provider.KeyValue, error) {
+	t.Helper()
+	p := &KeyringProvider{}
+	secretContext := secrets.NewEmptySecretContext(context.Background())
+	return p.Fetch(secretContext, "keyring-test", config, keys)
+}
+
+func TestFetch_FlatJSONExpandsToSeveralVariables(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("myapp", "bundle", `{"DB_USER":"admin","DB_PASS":"x","PORT":5432}`); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{"service": "myapp", "user": "bundle"}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	got := map[string]string{}
+	for _, kv := range kvs {
+		got[kv.Key] = kv.Value
+	}
+
+	want := map[string]string{"DB_USER": "admin", "DB_PASS": "x", "PORT": "5432"}
+	if len(got) != len(want) {
+		t.Fatalf("got %d variables, want %d: %v", len(got), len(want), got)
+	}
+	for key, value := range want {
+		if got[key] != value {
+			t.Errorf("%s = %q, want %q", key, got[key], value)
+		}
+	}
+}
+
+func TestFetch_JSONHonoursKeysMapping(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("myapp", "bundle", `{"DB_USER":"admin","DB_PASS":"x","IGNORED":"y"}`); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t,
+		map[string]interface{}{"service": "myapp", "user": "bundle"},
+		map[string]string{"DB_USER": "POSTGRES_USER", "DB_PASS": "=="},
+	)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	got := map[string]string{}
+	for _, kv := range kvs {
+		got[kv.Key] = kv.Value
+	}
+
+	if len(got) != 2 {
+		t.Fatalf("got %d variables, want 2: %v", len(got), got)
+	}
+	if got["POSTGRES_USER"] != "admin" {
+		t.Errorf("POSTGRES_USER = %q, want %q", got["POSTGRES_USER"], "admin")
+	}
+	if got["DB_PASS"] != "x" {
+		t.Errorf("DB_PASS = %q, want %q", got["DB_PASS"], "x")
+	}
+	if _, present := got["IGNORED"]; present {
+		t.Error("IGNORED was mapped despite not being listed in keys")
+	}
+}
+
+func TestFetch_NestedValuesFollowTheHouseRule(t *testing.T) {
+	gokeyring.MockInit()
+	payload := `{"EXPIRES_AT":1754110382,"SCOPES":["read","write"],"NESTED":{"token":"sk-secret"}}`
+	if err := gokeyring.Set("myapp", "mixed", payload); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{"service": "myapp", "user": "mixed"}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	got := map[string]string{}
+	for _, kv := range kvs {
+		got[kv.Key] = kv.Value
+	}
+
+	want := map[string]string{
+		"EXPIRES_AT": "1754110382",
+		"SCOPES":     `["read","write"]`,
+		"NESTED":     `{"token":"sk-secret"}`,
+	}
+	for key, value := range want {
+		if got[key] != value {
+			t.Errorf("%s = %q, want %q", key, got[key], value)
+		}
+	}
+}
+
+func TestFetch_JSONArrayIsASingleValue(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("myapp", "arr", `["a","b"]`); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{"service": "myapp", "user": "arr"}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	if len(kvs) != 1 {
+		t.Fatalf("got %d variables, want 1: %v", len(kvs), kvs)
+	}
+	if kvs[0].Value != `["a","b"]` {
+		t.Errorf("Value = %q, want %q", kvs[0].Value, `["a","b"]`)
+	}
+}
+
+const claudeShapedPayload = `{
+	"claudeAiOauth": {"accessToken": "sk-secret", "expiresAt": 1754110382, "scopes": ["read", "write"]},
+	"mcpOAuth": {"plugin:engineering:github|1eea5f27": {"accessToken": "gh-token"}}
+}`
+
+func TestFetch_PointerToScalar(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("Claude Code-credentials", "husni", claudeShapedPayload); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{
+		"service": "Claude Code-credentials",
+		"user":    "husni",
+		"pointer": "/claudeAiOauth/accessToken",
+		"key":     "CLAUDE_TOKEN",
+	}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	if len(kvs) != 1 {
+		t.Fatalf("got %d variables, want 1: %v", len(kvs), kvs)
+	}
+	if kvs[0].Key != "CLAUDE_TOKEN" {
+		t.Errorf("Key = %q, want %q", kvs[0].Key, "CLAUDE_TOKEN")
+	}
+	if kvs[0].Value != "sk-secret" {
+		t.Errorf("Value = %q, want %q", kvs[0].Value, "sk-secret")
+	}
+}
+
+// The point of narrowing: the other tokens in a real credential blob must not
+// reach the child process when one token was asked for.
+func TestFetch_PointerDoesNotLeakSiblings(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("Claude Code-credentials", "husni", claudeShapedPayload); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{
+		"service": "Claude Code-credentials",
+		"user":    "husni",
+		"pointer": "/claudeAiOauth/accessToken",
+	}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	for _, kv := range kvs {
+		if strings.Contains(kv.Value, "gh-token") {
+			t.Errorf("variable %s leaked an unrelated token: %q", kv.Key, kv.Value)
+		}
+	}
+}
+
+func TestFetch_PointerToObjectExpands(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("Claude Code-credentials", "husni", claudeShapedPayload); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{
+		"service": "Claude Code-credentials",
+		"user":    "husni",
+		"pointer": "/claudeAiOauth",
+	}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	got := map[string]string{}
+	for _, kv := range kvs {
+		got[kv.Key] = kv.Value
+	}
+
+	if got["accessToken"] != "sk-secret" {
+		t.Errorf("accessToken = %q, want %q", got["accessToken"], "sk-secret")
+	}
+	if got["expiresAt"] != "1754110382" {
+		t.Errorf("expiresAt = %q, want %q", got["expiresAt"], "1754110382")
+	}
+	if got["scopes"] != `["read","write"]` {
+		t.Errorf("scopes = %q, want %q", got["scopes"], `["read","write"]`)
+	}
+}
+
+func TestFetch_PointerThroughAwkwardKey(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("Claude Code-credentials", "husni", claudeShapedPayload); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{
+		"service": "Claude Code-credentials",
+		"user":    "husni",
+		"pointer": "/mcpOAuth/plugin:engineering:github|1eea5f27/accessToken",
+		"key":     "GITHUB_TOKEN",
+	}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	if len(kvs) != 1 || kvs[0].Key != "GITHUB_TOKEN" || kvs[0].Value != "gh-token" {
+		t.Fatalf("got %v, want a single GITHUB_TOKEN=gh-token", kvs)
+	}
+}
+
+func TestFetch_PointerErrors(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("myapp", "json", `{"a":"b"}`); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+	if err := gokeyring.Set("myapp", "plain", "hunter2"); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		user    string
+		pointer string
+		wantMsg string
+	}{
+		{"pointer matches nothing", "json", "/nope", "/nope"},
+		{"pointer against a non JSON payload", "plain", "/a", "not JSON"},
+		{"malformed pointer", "json", "a", "must start with"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := fetchForTest(t, map[string]interface{}{
+				"service": "myapp",
+				"user":    tt.user,
+				"pointer": tt.pointer,
+			}, nil)
+			if err == nil {
+				t.Fatal("Fetch() succeeded, want an error")
+			}
+			if !strings.Contains(err.Error(), tt.wantMsg) {
+				t.Errorf("error = %q, want it to contain %q", err.Error(), tt.wantMsg)
+			}
+		})
+	}
+}

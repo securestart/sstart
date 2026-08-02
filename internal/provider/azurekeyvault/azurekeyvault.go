@@ -88,8 +88,8 @@ func (p *AzureKeyVaultProvider) Fetch(secretContext provider.SecretContext, mapI
 	}
 
 	// Try to parse as JSON first
-	var secretData map[string]interface{}
-	if err := json.Unmarshal([]byte(secretValue), &secretData); err != nil {
+	secretData, err := provider.DecodeSecretJSON([]byte(secretValue))
+	if err != nil {
 		// If not JSON, treat as a single value
 		secretKey := strings.ToUpper(strings.ReplaceAll(mapID, "-", "_")) + "_SECRET"
 		log.Printf("WARN: Secret from provider '%s' is not JSON format. Secret loaded to %s", mapID, secretKey)
@@ -118,7 +118,7 @@ func (p *AzureKeyVaultProvider) Fetch(secretContext provider.SecretContext, mapI
 			continue
 		}
 
-		value := fmt.Sprintf("%v", v)
+		value := provider.StringifyValue(v)
 		kvs = append(kvs, provider.KeyValue{
 			Key:   targetKey,
 			Value: value,
