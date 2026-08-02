@@ -151,11 +151,20 @@ func SetupAllContainers(ctx context.Context, t *testing.T) (*LocalStackContainer
 func SetupAWSSecret(ctx context.Context, t *testing.T, localstack *LocalStackContainer, secretName string, secretData map[string]string) {
 	t.Helper()
 
-	awsRegion := "us-east-1"
 	secretJSON, err := json.Marshal(secretData)
 	if err != nil {
 		t.Fatalf("Failed to marshal secret data: %v", err)
 	}
+
+	SetupAWSSecretRaw(ctx, t, localstack, secretName, string(secretJSON))
+}
+
+// SetupAWSSecretRaw stores a secret payload verbatim, for cases where the
+// payload is not a flat map of strings.
+func SetupAWSSecretRaw(ctx context.Context, t *testing.T, localstack *LocalStackContainer, secretName string, payload string) {
+	t.Helper()
+
+	awsRegion := "us-east-1"
 
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
 		awsconfig.WithRegion(awsRegion),
@@ -171,7 +180,7 @@ func SetupAWSSecret(ctx context.Context, t *testing.T, localstack *LocalStackCon
 
 	_, err = secretsManagerClient.CreateSecret(ctx, &secretsmanager.CreateSecretInput{
 		Name:         aws.String(secretName),
-		SecretString: aws.String(string(secretJSON)),
+		SecretString: aws.String(payload),
 	})
 	if err != nil {
 		t.Fatalf("Failed to create secret in AWS Secrets Manager: %v", err)

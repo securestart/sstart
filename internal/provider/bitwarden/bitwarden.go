@@ -195,9 +195,11 @@ func (p *BitwardenProvider) Fetch(secretContext provider.SecretContext, mapID st
 		if item.Notes == "" {
 			return nil, fmt.Errorf("bitwarden item '%s' has no notes for 'note' format", cfg.ItemID)
 		}
-		if err := json.Unmarshal([]byte(item.Notes), &secretData); err != nil {
+		parsedNotes, err := provider.DecodeSecretJSON([]byte(item.Notes))
+		if err != nil {
 			return nil, fmt.Errorf("failed to parse notes as JSON for bitwarden item '%s': %w", cfg.ItemID, err)
 		}
+		secretData = parsedNotes
 	case "login":
 		// Extract login credentials
 		if item.Login == nil {
@@ -301,7 +303,7 @@ func (p *BitwardenProvider) Fetch(secretContext provider.SecretContext, mapID st
 			continue
 		}
 
-		value := fmt.Sprintf("%v", v)
+		value := provider.StringifyValue(v)
 		kvs = append(kvs, provider.KeyValue{
 			Key:   targetKey,
 			Value: value,
