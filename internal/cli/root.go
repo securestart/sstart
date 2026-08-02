@@ -10,6 +10,7 @@ import (
 	_ "github.com/dirathea/sstart/internal/provider/dotenv"
 	_ "github.com/dirathea/sstart/internal/provider/gcsm"
 	_ "github.com/dirathea/sstart/internal/provider/infisical"
+	_ "github.com/dirathea/sstart/internal/provider/keyring"
 	_ "github.com/dirathea/sstart/internal/provider/onepassword"
 	_ "github.com/dirathea/sstart/internal/provider/template"
 	_ "github.com/dirathea/sstart/internal/provider/vault"
