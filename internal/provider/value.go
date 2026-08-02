@@ -7,17 +7,16 @@ import (
 	"strconv"
 )
 
-// DecodeSecretJSON parses a secret payload into a generic map, keeping numbers
-// as json.Number so that their original text survives the round trip.
+// DecodeSecretJSONValue parses a secret payload into a generic value, keeping
+// numbers as json.Number so that their original text survives the round trip.
 //
-// Decoding into interface{} the usual way turns every JSON number into a
-// float64, and large integers such as Unix timestamps then stringify as
-// scientific notation.
-func DecodeSecretJSON(data []byte) (map[string]interface{}, error) {
+// Unlike DecodeSecretJSON it accepts any JSON document, not only an object,
+// because a JSON pointer may address an array element or a bare scalar.
+func DecodeSecretJSONValue(data []byte) (interface{}, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 
-	var parsed map[string]interface{}
+	var parsed interface{}
 	if err := dec.Decode(&parsed); err != nil {
 		return nil, err
 	}
@@ -30,6 +29,26 @@ func DecodeSecretJSON(data []byte) (map[string]interface{}, error) {
 	}
 
 	return parsed, nil
+}
+
+// DecodeSecretJSON parses a secret payload into a generic map, keeping numbers
+// as json.Number so that their original text survives the round trip.
+//
+// Decoding into interface{} the usual way turns every JSON number into a
+// float64, and large integers such as Unix timestamps then stringify as
+// scientific notation.
+func DecodeSecretJSON(data []byte) (map[string]interface{}, error) {
+	parsed, err := DecodeSecretJSONValue(data)
+	if err != nil {
+		return nil, err
+	}
+
+	object, ok := parsed.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("secret payload is not a JSON object")
+	}
+
+	return object, nil
 }
 
 // StringifyValue renders a decoded JSON value as the string that goes into an

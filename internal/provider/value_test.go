@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -106,5 +107,49 @@ func TestDecodeSecretJSON_NumbersAreNotFloats(t *testing.T) {
 
 	if _, ok := parsed["n"].(json.Number); !ok {
 		t.Errorf("n decoded as %T, want json.Number", parsed["n"])
+	}
+}
+
+func TestDecodeSecretJSONValue(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    interface{}
+		wantErr bool
+	}{
+		{"object", `{"a":"b"}`, map[string]interface{}{"a": "b"}, false},
+		{"array", `["a","b"]`, []interface{}{"a", "b"}, false},
+		{"bare string", `"hello"`, "hello", false},
+		{"bare bool", `true`, true, false},
+		{"not json", `hunter2`, nil, true},
+		{"trailing content", `{"a":"b"} extra`, nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := DecodeSecretJSONValue([]byte(tt.payload))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("DecodeSecretJSONValue(%q) error = %v, wantErr %v", tt.payload, err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("DecodeSecretJSONValue(%q) = %#v, want %#v", tt.payload, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDecodeSecretJSONValue_NumbersKeepTheirText(t *testing.T) {
+	got, err := DecodeSecretJSONValue([]byte(`1754110382`))
+	if err != nil {
+		t.Fatalf("DecodeSecretJSONValue() error = %v", err)
+	}
+	if _, ok := got.(json.Number); !ok {
+		t.Fatalf("decoded as %T, want json.Number", got)
+	}
+	if StringifyValue(got) != "1754110382" {
+		t.Errorf("StringifyValue = %q, want %q", StringifyValue(got), "1754110382")
 	}
 }
