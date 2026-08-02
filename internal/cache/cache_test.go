@@ -294,28 +294,34 @@ func TestCache_Stats(t *testing.T) {
 		t.Errorf("expected empty stats after clear, got total=%d", total)
 	}
 
-	// Use short-lived cache for this test
-	shortCache := New(WithTTL(150 * time.Millisecond))
-
-	// Use unique keys
+	// Use unique keys so a leftover store from another run cannot affect counts
 	key1 := fmt.Sprintf("stats-key1-%d", time.Now().UnixNano())
 	key2 := fmt.Sprintf("stats-key2-%d", time.Now().UnixNano())
 
-	// Add entries quickly
-	_ = shortCache.Set(key1, map[string]string{"K": "V"})
-	_ = shortCache.Set(key2, map[string]string{"K": "V"})
+	// Freshly written entries are valid. The TTL has to be comfortably longer
+	// than two keyring writes take: each Set shells out to the OS keyring, which
+	// can cost hundreds of milliseconds, and a tight TTL expires key1 while key2
+	// is still being written.
+	validCache := New(WithTTL(5 * time.Minute))
+	_ = validCache.Set(key1, map[string]string{"K": "V"})
+	_ = validCache.Set(key2, map[string]string{"K": "V"})
 
-	total, valid, expired = shortCache.Stats()
+	total, valid, expired = validCache.Stats()
 	if valid != 2 {
 		t.Errorf("expected 2 valid entries immediately after set, got valid=%d, expired=%d", valid, expired)
 	}
 
-	// Wait for expiration
-	time.Sleep(200 * time.Millisecond)
+	_ = c.Clear()
 
-	total, valid, expired = shortCache.Stats()
+	// A negative TTL writes entries whose ExpiresAt is already in the past, so
+	// expiry is asserted without sleeping on a real clock.
+	expiredCache := New(WithTTL(-1 * time.Minute))
+	_ = expiredCache.Set(key1, map[string]string{"K": "V"})
+	_ = expiredCache.Set(key2, map[string]string{"K": "V"})
+
+	total, valid, expired = expiredCache.Stats()
 	if expired != 2 {
-		t.Errorf("expected 2 expired entries after TTL, got valid=%d, expired=%d", valid, expired)
+		t.Errorf("expected 2 expired entries, got valid=%d, expired=%d", valid, expired)
 	}
 
 	// Clean up
@@ -342,8 +348,9 @@ func TestCache_IsAvailable(t *testing.T) {
 
 func TestCache_KeyringNotAvailable(t *testing.T) {
 	cache := New()
-	// Force keyring to be disabled
-	cache.keyringTested = true
+	// Force keyring to be disabled. Consuming keyringOnce first stops
+	// isKeyringAvailable from probing the real keyring and overwriting this.
+	cache.keyringOnce.Do(func() {})
 	cache.keyringDisabled = true
 
 	// All operations should gracefully handle unavailable keyring

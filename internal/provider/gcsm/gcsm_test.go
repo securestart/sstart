@@ -75,7 +75,9 @@ func TestParseConfig(t *testing.T) {
 				"project_id": "",
 				"secret_id":  "my-secret",
 			},
-			wantErr: false, // parseConfig doesn't validate, Fetch does
+			wantProjectID: "",
+			wantSecretID:  "my-secret",
+			wantErr:       false, // parseConfig doesn't validate, Fetch does
 		},
 		{
 			name: "config with missing project_id field",
