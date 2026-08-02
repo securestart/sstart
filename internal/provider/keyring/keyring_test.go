@@ -293,3 +293,148 @@ func TestFetch_JSONArrayIsASingleValue(t *testing.T) {
 		t.Errorf("Value = %q, want %q", kvs[0].Value, `["a","b"]`)
 	}
 }
+
+const claudeShapedPayload = `{
+	"claudeAiOauth": {"accessToken": "sk-secret", "expiresAt": 1754110382, "scopes": ["read", "write"]},
+	"mcpOAuth": {"plugin:engineering:github|1eea5f27": {"accessToken": "gh-token"}}
+}`
+
+func TestFetch_PointerToScalar(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("Claude Code-credentials", "husni", claudeShapedPayload); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{
+		"service": "Claude Code-credentials",
+		"user":    "husni",
+		"pointer": "/claudeAiOauth/accessToken",
+		"key":     "CLAUDE_TOKEN",
+	}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	if len(kvs) != 1 {
+		t.Fatalf("got %d variables, want 1: %v", len(kvs), kvs)
+	}
+	if kvs[0].Key != "CLAUDE_TOKEN" {
+		t.Errorf("Key = %q, want %q", kvs[0].Key, "CLAUDE_TOKEN")
+	}
+	if kvs[0].Value != "sk-secret" {
+		t.Errorf("Value = %q, want %q", kvs[0].Value, "sk-secret")
+	}
+}
+
+// The point of narrowing: the other tokens in a real credential blob must not
+// reach the child process when one token was asked for.
+func TestFetch_PointerDoesNotLeakSiblings(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("Claude Code-credentials", "husni", claudeShapedPayload); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{
+		"service": "Claude Code-credentials",
+		"user":    "husni",
+		"pointer": "/claudeAiOauth/accessToken",
+	}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	for _, kv := range kvs {
+		if strings.Contains(kv.Value, "gh-token") {
+			t.Errorf("variable %s leaked an unrelated token: %q", kv.Key, kv.Value)
+		}
+	}
+}
+
+func TestFetch_PointerToObjectExpands(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("Claude Code-credentials", "husni", claudeShapedPayload); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{
+		"service": "Claude Code-credentials",
+		"user":    "husni",
+		"pointer": "/claudeAiOauth",
+	}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	got := map[string]string{}
+	for _, kv := range kvs {
+		got[kv.Key] = kv.Value
+	}
+
+	if got["accessToken"] != "sk-secret" {
+		t.Errorf("accessToken = %q, want %q", got["accessToken"], "sk-secret")
+	}
+	if got["expiresAt"] != "1754110382" {
+		t.Errorf("expiresAt = %q, want %q", got["expiresAt"], "1754110382")
+	}
+	if got["scopes"] != `["read","write"]` {
+		t.Errorf("scopes = %q, want %q", got["scopes"], `["read","write"]`)
+	}
+}
+
+func TestFetch_PointerThroughAwkwardKey(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("Claude Code-credentials", "husni", claudeShapedPayload); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{
+		"service": "Claude Code-credentials",
+		"user":    "husni",
+		"pointer": "/mcpOAuth/plugin:engineering:github|1eea5f27/accessToken",
+		"key":     "GITHUB_TOKEN",
+	}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	if len(kvs) != 1 || kvs[0].Key != "GITHUB_TOKEN" || kvs[0].Value != "gh-token" {
+		t.Fatalf("got %v, want a single GITHUB_TOKEN=gh-token", kvs)
+	}
+}
+
+func TestFetch_PointerErrors(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("myapp", "json", `{"a":"b"}`); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+	if err := gokeyring.Set("myapp", "plain", "hunter2"); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		user    string
+		pointer string
+		wantMsg string
+	}{
+		{"pointer matches nothing", "json", "/nope", "/nope"},
+		{"pointer against a non JSON payload", "plain", "/a", "not JSON"},
+		{"malformed pointer", "json", "a", "must start with"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := fetchForTest(t, map[string]interface{}{
+				"service": "myapp",
+				"user":    tt.user,
+				"pointer": tt.pointer,
+			}, nil)
+			if err == nil {
+				t.Fatal("Fetch() succeeded, want an error")
+			}
+			if !strings.Contains(err.Error(), tt.wantMsg) {
+				t.Errorf("error = %q, want it to contain %q", err.Error(), tt.wantMsg)
+			}
+		})
+	}
+}

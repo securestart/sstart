@@ -65,7 +65,25 @@ func (p *KeyringProvider) Fetch(secretContext provider.SecretContext, mapID stri
 			"On Linux this usually means no Secret Service is running, which is common on headless hosts", cfg.Service, cfg.User, err)
 	}
 
-	return mapValue(cfg, mapID, keys, secretValue), nil
+	if cfg.Pointer == "" {
+		return mapValue(cfg, mapID, keys, secretValue), nil
+	}
+
+	document, err := provider.DecodeSecretJSONValue([]byte(secretValue))
+	if err != nil {
+		return nil, fmt.Errorf("keyring provider has 'pointer' set for service '%s' and user '%s', but the item's value is not JSON: %w", cfg.Service, cfg.User, err)
+	}
+
+	node, err := provider.ResolvePointer(document, cfg.Pointer)
+	if err != nil {
+		return nil, fmt.Errorf("keyring provider for service '%s' and user '%s': %w", cfg.Service, cfg.User, err)
+	}
+
+	if object, ok := node.(map[string]interface{}); ok {
+		return expandObject(object, keys), nil
+	}
+
+	return singleValue(cfg, mapID, provider.StringifyValue(node)), nil
 }
 
 // mapValue turns an item's raw value into variables. A JSON object becomes one
