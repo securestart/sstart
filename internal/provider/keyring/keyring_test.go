@@ -185,3 +185,111 @@ func fetchForTest(t *testing.T, config map[string]interface{}, keys map[string]s
 	secretContext := secrets.NewEmptySecretContext(context.Background())
 	return p.Fetch(secretContext, "keyring-test", config, keys)
 }
+
+func TestFetch_FlatJSONExpandsToSeveralVariables(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("myapp", "bundle", `{"DB_USER":"admin","DB_PASS":"x","PORT":5432}`); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{"service": "myapp", "user": "bundle"}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	got := map[string]string{}
+	for _, kv := range kvs {
+		got[kv.Key] = kv.Value
+	}
+
+	want := map[string]string{"DB_USER": "admin", "DB_PASS": "x", "PORT": "5432"}
+	if len(got) != len(want) {
+		t.Fatalf("got %d variables, want %d: %v", len(got), len(want), got)
+	}
+	for key, value := range want {
+		if got[key] != value {
+			t.Errorf("%s = %q, want %q", key, got[key], value)
+		}
+	}
+}
+
+func TestFetch_JSONHonoursKeysMapping(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("myapp", "bundle", `{"DB_USER":"admin","DB_PASS":"x","IGNORED":"y"}`); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t,
+		map[string]interface{}{"service": "myapp", "user": "bundle"},
+		map[string]string{"DB_USER": "POSTGRES_USER", "DB_PASS": "=="},
+	)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	got := map[string]string{}
+	for _, kv := range kvs {
+		got[kv.Key] = kv.Value
+	}
+
+	if len(got) != 2 {
+		t.Fatalf("got %d variables, want 2: %v", len(got), got)
+	}
+	if got["POSTGRES_USER"] != "admin" {
+		t.Errorf("POSTGRES_USER = %q, want %q", got["POSTGRES_USER"], "admin")
+	}
+	if got["DB_PASS"] != "x" {
+		t.Errorf("DB_PASS = %q, want %q", got["DB_PASS"], "x")
+	}
+	if _, present := got["IGNORED"]; present {
+		t.Error("IGNORED was mapped despite not being listed in keys")
+	}
+}
+
+func TestFetch_NestedValuesFollowTheHouseRule(t *testing.T) {
+	gokeyring.MockInit()
+	payload := `{"EXPIRES_AT":1754110382,"SCOPES":["read","write"],"NESTED":{"token":"sk-secret"}}`
+	if err := gokeyring.Set("myapp", "mixed", payload); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{"service": "myapp", "user": "mixed"}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	got := map[string]string{}
+	for _, kv := range kvs {
+		got[kv.Key] = kv.Value
+	}
+
+	want := map[string]string{
+		"EXPIRES_AT": "1754110382",
+		"SCOPES":     `["read","write"]`,
+		"NESTED":     `{"token":"sk-secret"}`,
+	}
+	for key, value := range want {
+		if got[key] != value {
+			t.Errorf("%s = %q, want %q", key, got[key], value)
+		}
+	}
+}
+
+func TestFetch_JSONArrayIsASingleValue(t *testing.T) {
+	gokeyring.MockInit()
+	if err := gokeyring.Set("myapp", "arr", `["a","b"]`); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+
+	kvs, err := fetchForTest(t, map[string]interface{}{"service": "myapp", "user": "arr"}, nil)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+
+	if len(kvs) != 1 {
+		t.Fatalf("got %d variables, want 1: %v", len(kvs), kvs)
+	}
+	if kvs[0].Value != `["a","b"]` {
+		t.Errorf("Value = %q, want %q", kvs[0].Value, `["a","b"]`)
+	}
+}

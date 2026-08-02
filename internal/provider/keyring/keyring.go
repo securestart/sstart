@@ -65,7 +65,52 @@ func (p *KeyringProvider) Fetch(secretContext provider.SecretContext, mapID stri
 			"On Linux this usually means no Secret Service is running, which is common on headless hosts", cfg.Service, cfg.User, err)
 	}
 
-	return singleValue(cfg, mapID, secretValue), nil
+	return mapValue(cfg, mapID, keys, secretValue), nil
+}
+
+// mapValue turns an item's raw value into variables. A JSON object becomes one
+// variable per key, matching what the cloud providers do with a JSON payload;
+// anything else becomes a single variable.
+//
+// A payload that is not JSON at all is emitted verbatim, so a plain password is
+// passed through untouched rather than round-tripped.
+func mapValue(cfg *KeyringConfig, mapID string, keys map[string]string, raw string) []provider.KeyValue {
+	decoded, err := provider.DecodeSecretJSONValue([]byte(raw))
+	if err != nil {
+		return singleValue(cfg, mapID, raw)
+	}
+
+	if object, ok := decoded.(map[string]interface{}); ok {
+		return expandObject(object, keys)
+	}
+
+	return singleValue(cfg, mapID, provider.StringifyValue(decoded))
+}
+
+// expandObject maps each key of a JSON object to a variable, applying the keys
+// mapping the same way every other provider does.
+func expandObject(object map[string]interface{}, keys map[string]string) []provider.KeyValue {
+	kvs := make([]provider.KeyValue, 0, len(object))
+
+	for key, value := range object {
+		targetKey := key
+
+		if mappedKey, exists := keys[key]; exists {
+			if mappedKey != "==" {
+				targetKey = mappedKey
+			}
+		} else if len(keys) != 0 {
+			// Keys were specified and this one is not among them.
+			continue
+		}
+
+		kvs = append(kvs, provider.KeyValue{
+			Key:   targetKey,
+			Value: provider.StringifyValue(value),
+		})
+	}
+
+	return kvs
 }
 
 // singleValue emits the one variable used when the payload is not a JSON
