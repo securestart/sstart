@@ -737,6 +737,24 @@ keys:
 - Use `==` to keep the source key name as the target name
 - Keys are case-sensitive
 
+### Value Types
+
+Environment variables are always strings, so values from a JSON secret are
+converted:
+
+| JSON value | Environment variable |
+|---|---|
+| `"token"` | `token` |
+| `1754110382` | `1754110382` |
+| `1.5` | `1.5` |
+| `true` | `true` |
+| `["read","write"]` | `["read","write"]` |
+| `{"token":"secret"}` | `{"token":"secret"}` |
+| `null` | (empty string) |
+
+Numbers keep the digits they were written with. Arrays and objects are passed
+through as JSON, so the receiving process can parse them back.
+
 ## Environment Inheritance
 
 By default, sstart inherits all system environment variables and adds secrets on top. To create a clean environment with only secrets (no system environment variables), set `inherit: false`:

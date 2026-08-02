@@ -140,7 +140,7 @@ func (p *BitwardenSMProvider) Fetch(secretContext provider.SecretContext, mapID 
 			continue
 		}
 
-		value := fmt.Sprintf("%v", v)
+		value := provider.StringifyValue(v)
 		kvs = append(kvs, provider.KeyValue{
 			Key:   targetKey,
 			Value: value,

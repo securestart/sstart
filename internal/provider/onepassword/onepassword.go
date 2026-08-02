@@ -399,7 +399,7 @@ func mapSecretKeys(secretData map[string]interface{}, keys map[string]string) []
 			continue
 		}
 
-		value := fmt.Sprintf("%v", v)
+		value := provider.StringifyValue(v)
 		kvs = append(kvs, provider.KeyValue{
 			Key:   targetKey,
 			Value: value,

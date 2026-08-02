@@ -88,8 +88,8 @@ func (p *SecretsManagerProvider) Fetch(secretContext provider.SecretContext, map
 	}
 
 	// Parse the secret value (assuming JSON format)
-	var secretData map[string]interface{}
-	if err := json.Unmarshal([]byte(*result.SecretString), &secretData); err != nil {
+	secretData, err := provider.DecodeSecretJSON([]byte(*result.SecretString))
+	if err != nil {
 		// If not JSON, treat as a single value
 		secretKey := strings.ToUpper(strings.ReplaceAll(mapID, "-", "_")) + "_SECRET"
 		log.Printf("WARN: Secret from provider '%s' is not JSON format. Secret loaded to %s", mapID, secretKey)
@@ -118,7 +118,7 @@ func (p *SecretsManagerProvider) Fetch(secretContext provider.SecretContext, map
 			continue
 		}
 
-		value := fmt.Sprintf("%v", v)
+		value := provider.StringifyValue(v)
 		kvs = append(kvs, provider.KeyValue{
 			Key:   targetKey,
 			Value: value,

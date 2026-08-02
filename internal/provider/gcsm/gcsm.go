@@ -84,9 +84,9 @@ func (p *GCSMProvider) Fetch(secretContext provider.SecretContext, mapID string,
 	}
 
 	// Parse the secret value (assuming JSON format)
-	secretData := make(map[string]interface{})
 	secretString := string(result.Payload.Data)
-	if err := json.Unmarshal([]byte(secretString), &secretData); err != nil {
+	secretData, err := provider.DecodeSecretJSON([]byte(secretString))
+	if err != nil {
 		// If not JSON, treat as a single value
 		secretKey := strings.ToUpper(strings.ReplaceAll(mapID, "-", "_")) + "_SECRET"
 		log.Printf("WARN: Secret from provider '%s' is not JSON format. Secret loaded to %s", mapID, secretKey)
@@ -115,7 +115,7 @@ func (p *GCSMProvider) Fetch(secretContext provider.SecretContext, mapID string,
 			continue
 		}
 
-		value := fmt.Sprintf("%v", v)
+		value := provider.StringifyValue(v)
 		kvs = append(kvs, provider.KeyValue{
 			Key:   targetKey,
 			Value: value,
